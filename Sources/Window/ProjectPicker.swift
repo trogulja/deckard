@@ -179,8 +179,16 @@ class ProjectPicker: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTex
     }
 
     private func autocompleteSelection() {
-        let row = tableView.selectedRow
+        var row = tableView.selectedRow
         guard row >= 0, row < filteredProjects.count else { return }
+        // If selected row is the typed directory itself, jump to first subfolder
+        let currentInput = (searchField.stringValue as NSString).expandingTildeInPath
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let selectedPath = filteredProjects[row].path
+        if selectedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == currentInput,
+           row + 1 < filteredProjects.count {
+            row += 1
+        }
         let path = filteredProjects[row].path + "/"
         searchField.stringValue = path
         // Move cursor to end
@@ -225,12 +233,17 @@ class ProjectPicker: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTex
         let expanded = (input as NSString).expandingTildeInPath
         let fm = FileManager.default
 
-        // If the path is an existing directory, list its subdirectories
+        // If the path is an existing directory, show it first then its subdirectories
         var isDir: ObjCBool = false
         if fm.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
+            var results: [(path: String, lastUsed: Date)] = []
+            // The directory itself as the first option
+            let cleanPath = expanded.hasSuffix("/") ? String(expanded.dropLast()) : expanded
+            results.append((path: cleanPath, lastUsed: .now))
+
             let parent = expanded.hasSuffix("/") ? expanded : expanded + "/"
-            guard let contents = try? fm.contentsOfDirectory(atPath: expanded) else { return [] }
-            return contents
+            guard let contents = try? fm.contentsOfDirectory(atPath: expanded) else { return results }
+            results += contents
                 .filter { !$0.hasPrefix(".") }
                 .map { parent + $0 }
                 .filter { path in
@@ -239,6 +252,7 @@ class ProjectPicker: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTex
                 }
                 .sorted()
                 .map { (path: $0, lastUsed: .distantPast) }
+            return results
         }
 
         // Otherwise, treat as partial path: list parent dir filtered by prefix
