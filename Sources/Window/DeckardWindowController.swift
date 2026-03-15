@@ -930,7 +930,10 @@ class TabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
     }
 
     private func updateBadgeDots() {
-        badgeContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        badgeContainer.arrangedSubviews.forEach {
+            $0.layer?.removeAllAnimations()
+            $0.removeFromSuperview()
+        }
         for state in badgeStates where state != .none {
             let dot = NSView()
             dot.wantsLayer = true
@@ -942,8 +945,23 @@ class TabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
                 dot.widthAnchor.constraint(equalToConstant: 7),
                 dot.heightAnchor.constraint(equalToConstant: 7),
             ])
+            if state == .thinking {
+                Self.addPulseAnimation(to: dot)
+            }
             badgeContainer.addArrangedSubview(dot)
         }
+    }
+
+    static func addPulseAnimation(to view: NSView) {
+        guard let layer = view.layer else { return }
+        let anim = CABasicAnimation(keyPath: "opacity")
+        anim.fromValue = 1.0
+        anim.toValue = 0.3
+        anim.duration = 1.2
+        anim.autoreverses = true
+        anim.repeatCount = .infinity
+        anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(anim, forKey: "pulse")
     }
 
     static func tooltipForBadge(_ state: TabItem.BadgeState) -> String {
@@ -1115,6 +1133,9 @@ class HorizontalTabView: NSView, NSTextFieldDelegate {
                 dot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
                 dot.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
+            if badgeState == .thinking {
+                TabRowView.addPulseAnimation(to: dot)
+            }
             badgeDot = dot
         }
 
