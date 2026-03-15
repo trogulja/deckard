@@ -81,6 +81,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     private let tabBar = ReorderableHStackView()  // horizontal tab bar
     private let terminalContainerView = NSView()
     private let contextStatusBar = NSTextField(labelWithString: "")
+    private var contextStatusDivider: NSView?
     private var contextTimer: Timer?
     private var currentTerminalView: TerminalNSView?
     private var welcomeLabel: NSTextField?
@@ -247,11 +248,24 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         contextStatusBar.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.9).cgColor
         contextStatusBar.isHidden = true
         rightPane.addSubview(contextStatusBar)
+
+        let statusDivider = NSView()
+        statusDivider.wantsLayer = true
+        statusDivider.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        statusDivider.translatesAutoresizingMaskIntoConstraints = false
+        statusDivider.isHidden = true
+        rightPane.addSubview(statusDivider)
+        self.contextStatusDivider = statusDivider
+
         NSLayoutConstraint.activate([
             contextStatusBar.leadingAnchor.constraint(equalTo: rightPane.leadingAnchor),
             contextStatusBar.trailingAnchor.constraint(equalTo: rightPane.trailingAnchor),
             contextStatusBar.bottomAnchor.constraint(equalTo: rightPane.bottomAnchor),
             contextStatusBar.heightAnchor.constraint(equalToConstant: 18),
+            statusDivider.leadingAnchor.constraint(equalTo: rightPane.leadingAnchor),
+            statusDivider.trailingAnchor.constraint(equalTo: rightPane.trailingAnchor),
+            statusDivider.bottomAnchor.constraint(equalTo: contextStatusBar.topAnchor),
+            statusDivider.heightAnchor.constraint(equalToConstant: 1),
         ])
 
         splitView.addArrangedSubview(sidebarView)
@@ -566,12 +580,14 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         let showBar = UserDefaults.standard.object(forKey: "showContextBar") as? Bool ?? true
         if tab.isClaude && showBar {
             contextStatusBar.isHidden = false
+            contextStatusDivider?.isHidden = false
             updateContextUsage(for: tab)
             contextTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
                 self?.updateContextUsage(for: tab)
             }
         } else {
             contextStatusBar.isHidden = true
+            contextStatusDivider?.isHidden = true
         }
     }
 
