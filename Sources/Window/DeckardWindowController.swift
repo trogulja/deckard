@@ -162,7 +162,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         sidebarView.addSubview(hint)
 
         NSLayoutConstraint.activate([
-            sidebarStackView.topAnchor.constraint(equalTo: sidebarView.topAnchor, constant: 38),
+            sidebarStackView.topAnchor.constraint(equalTo: sidebarView.topAnchor, constant: 28),
             sidebarStackView.leadingAnchor.constraint(equalTo: sidebarView.leadingAnchor),
             sidebarStackView.trailingAnchor.constraint(equalTo: sidebarView.trailingAnchor),
 
