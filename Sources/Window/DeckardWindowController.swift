@@ -358,13 +358,8 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
 
         let systemPrompt = "You are the master controller for Deckard, a multi-session Claude Code terminal manager. You have MCP tools (via the deckard server) to list_tabs, create_tab, rename_tab, close_tab, focus_tab, get_tab_status, and create_terminal_tab. Use these to help the user manage their Claude Code sessions. When you see tabs with generic names, use list_tabs and rename_tab to give them descriptive 2-4 word names based on what the session is working on. Keep responses concise."
 
-        // Load saved master session ID for resumption
-        let state = SessionManager.shared.load()
-        masterSessionId = state?.masterSessionId
-        let resumeFlag = masterSessionId.map { " --resume \($0)" } ?? ""
-
         let pathPrefix = "export PATH=\"$DECKARD_BIN_DIR:$PATH\"; "
-        let initialInput = "\(pathPrefix)clear; claude\(mcpFlag)\(resumeFlag) --append-system-prompt '\(systemPrompt)'\n"
+        let initialInput = "\(pathPrefix)clear; claude\(mcpFlag) --append-system-prompt '\(systemPrompt)'\n"
 
         let masterId = UUID()
         surfaceView.createSurface(
