@@ -338,8 +338,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     func addTabToCurrentProject(isClaude: Bool) {
         guard selectedProjectIndex >= 0, selectedProjectIndex < projects.count else { return }
         let project = projects[selectedProjectIndex]
-        let name = isClaude ? "Claude" : "Terminal"
-        createTabInProject(project, isClaude: isClaude, name: name)
+        createTabInProject(project, isClaude: isClaude)
         project.selectedTabIndex = project.tabs.count - 1
         rebuildTabBar()
         showTab(project.tabs[project.selectedTabIndex])
