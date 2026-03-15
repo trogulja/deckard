@@ -270,21 +270,34 @@ class TerminalNSView: NSView {
 
     // MARK: - Keyboard Events
 
-    override func keyDown(with event: NSEvent) {
-        guard let surface = self.surface else { return }
-
-        let mods = Self.ghosttyMods(from: event)
-
-        // Build key event for ghostty
+    /// Build a ghostty key input struct from an NSEvent.
+    private func ghosttyKeyInput(for event: NSEvent) -> ghostty_input_key_s {
         var input = ghostty_input_key_s()
-        input.action = GHOSTTY_ACTION_PRESS
-        input.mods = mods
+        input.action = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
         input.keycode = UInt32(event.keyCode)
         input.composing = false
 
-        if let unshifted = event.charactersIgnoringModifiers?.unicodeScalars.first {
+        // Use translation mods if available (respects macos-option-as-alt config)
+        let rawMods = Self.ghosttyMods(from: event)
+        if let surface = self.surface {
+            input.mods = ghostty_surface_key_translation_mods(surface, rawMods)
+        } else {
+            input.mods = rawMods
+        }
+
+        // Unshifted codepoint = the key without modifiers applied
+        if let unshifted = event.charactersIgnoringModifiers?.unicodeScalars.first,
+           unshifted.value < 0xF700 { // exclude private-use function key chars
             input.unshifted_codepoint = unshifted.value
         }
+
+        return input
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard let surface = self.surface else { return }
+
+        var input = ghosttyKeyInput(for: event)
 
         // Check if ghostty handles this as a keybinding
         var flags: ghostty_binding_flags_e = ghostty_binding_flags_e(rawValue: 0)
@@ -293,21 +306,30 @@ class TerminalNSView: NSView {
             return
         }
 
-        // Use macOS text input system to get the proper text for this key
-        // (handles Shift+letters, dead keys, Option+key combos, etc.)
+        // Fast path for Ctrl+key — bypass interpretKeyEvents for deterministic
+        // terminal control characters (Ctrl+C, Ctrl+D, etc.)
+        let nsFlags = event.modifierFlags
+        if nsFlags.contains(.control) && !nsFlags.contains(.command) {
+            _ = ghostty_surface_key(surface, input)
+            return
+        }
+
+        // Use macOS text input system for proper text handling
+        // (Shift+letters, dead keys, Option+key combos, IME, etc.)
         keyTextAccumulator = []
         interpretKeyEvents([event])
 
         if let texts = keyTextAccumulator, !texts.isEmpty {
-            // Send as a key event WITH text — not ghostty_surface_text which
-            // triggers bracketed paste mode ("Pasting text..." in Claude)
             let text = texts.joined()
             text.withCString { ptr in
                 input.text = ptr
+                // Mark shift/option as consumed since they affected the text
+                let consumed = nsFlags.intersection([.shift, .option])
+                input.consumed_mods = Self.ghosttyMods(fromCocoa: consumed)
                 _ = ghostty_surface_key(surface, input)
             }
         } else {
-            // No text produced — send as raw key (arrows, function keys, etc.)
+            // No text produced — raw key event (arrows, function keys, etc.)
             _ = ghostty_surface_key(surface, input)
         }
         keyTextAccumulator = nil
@@ -315,12 +337,9 @@ class TerminalNSView: NSView {
 
     override func keyUp(with event: NSEvent) {
         guard let surface = self.surface else { return }
-        let mods = Self.ghosttyMods(from: event)
-
-        var input = ghostty_input_key_s()
+        var input = ghosttyKeyInput(for: event)
         input.action = GHOSTTY_ACTION_RELEASE
-        input.mods = mods
-        input.keycode = UInt32(event.keyCode)
+        input.text = nil
         _ = ghostty_surface_key(surface, input)
     }
 
@@ -338,15 +357,7 @@ class TerminalNSView: NSView {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard let surface = self.surface else { return false }
 
-        let mods = Self.ghosttyMods(from: event)
-        var input = ghostty_input_key_s()
-        input.action = GHOSTTY_ACTION_PRESS
-        input.mods = mods
-        input.keycode = UInt32(event.keyCode)
-
-        if let unshifted = event.charactersIgnoringModifiers?.unicodeScalars.first {
-            input.unshifted_codepoint = unshifted.value
-        }
+        let input = ghosttyKeyInput(for: event)
 
         // Let ghostty handle keybindings (Cmd+C, etc.)
         var flags: ghostty_binding_flags_e = ghostty_binding_flags_e(rawValue: 0)
@@ -439,8 +450,11 @@ class TerminalNSView: NSView {
 
     /// Convert NSEvent modifier flags to Ghostty modifier flags.
     static func ghosttyMods(from event: NSEvent) -> ghostty_input_mods_e {
+        return ghosttyMods(fromCocoa: event.modifierFlags)
+    }
+
+    static func ghosttyMods(fromCocoa flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
         var mods = GHOSTTY_MODS_NONE
-        let flags = event.modifierFlags
         if flags.contains(.shift) { mods = ghostty_input_mods_e(rawValue: mods.rawValue | GHOSTTY_MODS_SHIFT.rawValue) }
         if flags.contains(.control) { mods = ghostty_input_mods_e(rawValue: mods.rawValue | GHOSTTY_MODS_CTRL.rawValue) }
         if flags.contains(.option) { mods = ghostty_input_mods_e(rawValue: mods.rawValue | GHOSTTY_MODS_ALT.rawValue) }
