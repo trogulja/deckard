@@ -49,7 +49,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // TODO: Save session state for resumption
+        windowController?.saveState()
     }
 
     // MARK: - Notification Handlers

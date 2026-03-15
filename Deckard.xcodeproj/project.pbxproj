@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0D4C913A8846099ED84D5816 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F505D5B7348F40C2CBD6F83 /* AppDelegate.swift */; };
+		2D322E22D0679FD39D688539 /* SessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE2AA0719D32ACCD1549184 /* SessionState.swift */; };
 		37FA9D946FD6ECA1DDF5898A /* DeckardWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8391EFB62A21AFA1DA62733F /* DeckardWindowController.swift */; };
 		41C3D848646ABF112104F6A4 /* DeckardGhosttyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A605D524B1CC5AAC25147C77 /* DeckardGhosttyApp.swift */; };
 		432752F9187D2E815F617B96 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88AA91CDBC6DDE958543FB29 /* main.swift */; };
@@ -17,6 +18,7 @@
 /* Begin PBXFileReference section */
 		1819508589B0D94AC0310DDB /* SurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfaceView.swift; sourceTree = "<group>"; };
 		6C2CC70A6932271D0EE46154 /* Deckard-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Deckard-Bridging-Header.h"; sourceTree = "<group>"; };
+		7BE2AA0719D32ACCD1549184 /* SessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionState.swift; sourceTree = "<group>"; };
 		7F505D5B7348F40C2CBD6F83 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		8391EFB62A21AFA1DA62733F /* DeckardWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckardWindowController.swift; sourceTree = "<group>"; };
 		88AA91CDBC6DDE958543FB29 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -47,6 +49,7 @@
 			children = (
 				D9E692010CB76393406ACC25 /* App */,
 				6C026CBEF5BFC7F5AA2A142A /* Ghostty */,
+				D37A3C1FE7FFA62F32147FC6 /* Session */,
 				CF4AAC55B24D890FD6CF1507 /* Window */,
 			);
 			path = Sources;
@@ -58,6 +61,14 @@
 				8391EFB62A21AFA1DA62733F /* DeckardWindowController.swift */,
 			);
 			path = Window;
+			sourceTree = "<group>";
+		};
+		D37A3C1FE7FFA62F32147FC6 /* Session */ = {
+			isa = PBXGroup;
+			children = (
+				7BE2AA0719D32ACCD1549184 /* SessionState.swift */,
+			);
+			path = Session;
 			sourceTree = "<group>";
 		};
 		D8C6C048766D6149A60A67D0 /* Products */ = {
@@ -156,6 +167,7 @@
 				0D4C913A8846099ED84D5816 /* AppDelegate.swift in Sources */,
 				41C3D848646ABF112104F6A4 /* DeckardGhosttyApp.swift in Sources */,
 				37FA9D946FD6ECA1DDF5898A /* DeckardWindowController.swift in Sources */,
+				2D322E22D0679FD39D688539 /* SessionState.swift in Sources */,
 				F14F059C3523C8983BFF01FD /* SurfaceView.swift in Sources */,
 				432752F9187D2E815F617B96 /* main.swift in Sources */,
 			);

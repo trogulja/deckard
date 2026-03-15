@@ -72,11 +72,20 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         }
 
         setupUI()
-        createTab(claude: true)
+        restoreOrCreateInitialTab()
+
+        // Start autosaving state every 8 seconds
+        SessionManager.shared.startAutosave { [weak self] in
+            self?.captureState() ?? DeckardState()
+        }
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    deinit {
+        SessionManager.shared.stopAutosave()
     }
 
     // MARK: - UI Setup
@@ -159,7 +168,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         set { UserDefaults.standard.set(newValue, forKey: "defaultWorkingDirectory") }
     }
 
-    func createTab(claude: Bool, workingDirectory: String? = nil, name: String? = nil) {
+    func createTab(claude: Bool, workingDirectory: String? = nil, name: String? = nil, sessionIdToResume: String? = nil) {
         guard let app = ghosttyApp.app else { return }
 
         let effectiveWorkingDirectory = workingDirectory ?? Self.defaultWorkingDirectory
@@ -176,20 +185,30 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
             tabName = "Terminal #\(terminalTabCounter)"
         }
         let tab = TabItem(surfaceView: surfaceView, name: tabName, isClaude: claude)
-        tab.workingDirectory = workingDirectory
+        tab.workingDirectory = effectiveWorkingDirectory
 
-        // For Claude tabs, start a normal shell and use initial_input
-        // to launch claude. This way the shell is fully set up (PATH, etc.)
-        // before claude runs, and our wrapper in Resources/bin/ intercepts it.
+        // Assign a session ID for Claude tabs so we can resume them later.
         var extraEnvVars: [String: String] = [:]
         if claude {
+            let sessionId = sessionIdToResume ?? UUID().uuidString.lowercased()
+            tab.sessionId = sessionId
             extraEnvVars["DECKARD_SESSION_TYPE"] = "claude"
+            extraEnvVars["DECKARD_CLAUDE_SESSION_ID"] = sessionId
         }
 
-        // For Claude tabs, start a shell and launch claude via initialInput.
-        // "clear" hides the login message, "exec" replaces the shell so
-        // closing claude closes the tab.
-        let initialInput: String? = claude ? "clear && exec claude\n" : nil
+        // For Claude tabs, launch claude via shell.
+        // "clear" hides the login message, "exec" replaces the shell.
+        // If resuming, pass --resume to continue the previous session.
+        let initialInput: String?
+        if claude {
+            if sessionIdToResume != nil {
+                initialInput = "clear && exec claude --resume \(tab.sessionId!)\n"
+            } else {
+                initialInput = "clear && exec claude\n"
+            }
+        } else {
+            initialInput = nil
+        }
 
         surfaceView.createSurface(
             app: app,
@@ -203,6 +222,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         tabs.append(tab)
         rebuildSidebar()
         selectTab(at: tabs.count - 1)
+        saveState()
     }
 
     func closeCurrentTab() {
@@ -223,11 +243,12 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         if tabs.isEmpty {
             selectedTabIndex = -1
             currentTerminalView = nil
-            createTab(claude: false)
+            createTab(claude: true)
         } else {
             let newIndex = min(index, tabs.count - 1)
             selectTab(at: newIndex)
         }
+        saveState()
     }
 
     func selectTab(at index: Int) {
@@ -300,6 +321,78 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     func handleSurfaceClosedById(_ surfaceId: UUID) {
         if let index = tabs.firstIndex(where: { $0.id == surfaceId }) {
             closeTab(at: index)
+        }
+    }
+
+    // MARK: - State Persistence
+
+    func captureState() -> DeckardState {
+        var state = DeckardState()
+        state.claudeTabCounter = claudeTabCounter
+        state.terminalTabCounter = terminalTabCounter
+        state.defaultWorkingDirectory = Self.defaultWorkingDirectory
+        state.selectedTabIndex = selectedTabIndex
+
+        state.tabs = tabs.map { tab in
+            TabState(
+                id: tab.id.uuidString,
+                sessionId: tab.sessionId,
+                name: tab.name,
+                nameOverride: tab.nameOverride,
+                isMaster: tab.isMaster,
+                isClaude: tab.isClaude,
+                workingDirectory: tab.workingDirectory
+            )
+        }
+
+        return state
+    }
+
+    func saveState() {
+        SessionManager.shared.save(captureState())
+    }
+
+    private func restoreOrCreateInitialTab() {
+        guard let state = SessionManager.shared.load(), !state.tabs.isEmpty else {
+            // No saved state — create first Claude tab
+            createTab(claude: true)
+            return
+        }
+
+        // Restore counters
+        claudeTabCounter = state.claudeTabCounter
+        terminalTabCounter = state.terminalTabCounter
+        if let dir = state.defaultWorkingDirectory {
+            Self.defaultWorkingDirectory = dir
+        }
+
+        // Restore each tab
+        for tabState in state.tabs {
+            if tabState.isClaude {
+                createTab(
+                    claude: true,
+                    workingDirectory: tabState.workingDirectory,
+                    name: tabState.name,
+                    sessionIdToResume: tabState.sessionId
+                )
+            } else {
+                createTab(
+                    claude: false,
+                    workingDirectory: tabState.workingDirectory,
+                    name: tabState.name
+                )
+            }
+        }
+
+        // Restore tab names that were overridden
+        for (i, tabState) in state.tabs.enumerated() where i < tabs.count {
+            tabs[i].nameOverride = tabState.nameOverride
+        }
+
+        // Restore selected tab
+        let idx = min(state.selectedTabIndex, tabs.count - 1)
+        if idx >= 0 {
+            selectTab(at: idx)
         }
     }
 

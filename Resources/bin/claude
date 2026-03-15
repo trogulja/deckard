@@ -48,12 +48,12 @@ for arg in "$@"; do
 done
 
 # Build hooks settings JSON.
-# Claude Code merges --settings additively with the user's own settings.json.
 HOOKS_JSON='{"hooks":{"SessionStart":[{"matcher":"","hooks":[{"type":"command","command":"echo DECKARD_HOOK:session-start:$DECKARD_SURFACE_ID","timeout":10}]}],"Stop":[{"matcher":"","hooks":[{"type":"command","command":"echo DECKARD_HOOK:stop:$DECKARD_SURFACE_ID","timeout":10}]}],"Notification":[{"matcher":"","hooks":[{"type":"command","command":"echo DECKARD_HOOK:notification:$DECKARD_SURFACE_ID","timeout":10}]}],"UserPromptSubmit":[{"matcher":"","hooks":[{"type":"command","command":"echo DECKARD_HOOK:user-prompt-submit:$DECKARD_SURFACE_ID","timeout":10}]}]}}'
 
 if [[ "$SKIP_SESSION_ID" == true ]]; then
     exec "$REAL_CLAUDE" --settings "$HOOKS_JSON" "$@"
 else
-    SESSION_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+    # Use the session ID assigned by Deckard if available, otherwise generate one.
+    SESSION_ID="${DECKARD_CLAUDE_SESSION_ID:-$(uuidgen | tr '[:upper:]' '[:lower:]')}"
     exec "$REAL_CLAUDE" --session-id "$SESSION_ID" --settings "$HOOKS_JSON" "$@"
 fi
