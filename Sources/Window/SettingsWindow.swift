@@ -205,6 +205,25 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         descLabel.textColor = .tertiaryLabelColor
         stack.addArrangedSubview(descLabel)
 
+        let linkLabel = NSTextField(labelWithString: "")
+        linkLabel.isEditable = false
+        linkLabel.isBordered = false
+        linkLabel.drawsBackground = false
+        linkLabel.isSelectable = true
+        linkLabel.allowsEditingTextAttributes = true
+        let linkString = NSMutableAttributedString(string: "Made by trailblaze.work")
+        let linkRange = (linkString.string as NSString).range(of: "trailblaze.work")
+        linkString.addAttributes([
+            .link: URL(string: "https://trailblaze.work")!,
+            .font: NSFont.systemFont(ofSize: 12),
+        ], range: linkRange)
+        linkString.addAttributes([
+            .font: NSFont.systemFont(ofSize: 12),
+            .foregroundColor: NSColor.tertiaryLabelColor,
+        ], range: NSRange(location: 0, length: "Made by ".count))
+        linkLabel.attributedStringValue = linkString
+        stack.addArrangedSubview(linkLabel)
+
         pane.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.centerXAnchor.constraint(equalTo: pane.centerXAnchor),

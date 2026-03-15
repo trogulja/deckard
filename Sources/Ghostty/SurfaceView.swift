@@ -357,9 +357,18 @@ class TerminalNSView: NSView {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard let surface = self.surface else { return false }
 
+        // Let Cmd+key shortcuts reach the menu system (Cmd+Q, Cmd+T, Cmd+W, etc.)
+        // Only intercept if ghostty has an explicit keybinding AND it's not a standard menu shortcut.
+        if event.modifierFlags.contains(.command) {
+            // Check if there's a menu item for this key — if so, don't intercept
+            if NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+                return true
+            }
+        }
+
         let input = ghosttyKeyInput(for: event)
 
-        // Let ghostty handle keybindings (Cmd+C, etc.)
+        // Let ghostty handle its keybindings
         var flags: ghostty_binding_flags_e = ghostty_binding_flags_e(rawValue: 0)
         if ghostty_surface_key_is_binding(surface, input, &flags) {
             return ghostty_surface_key(surface, input)
