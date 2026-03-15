@@ -415,18 +415,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
             initialInput = "stty -echo; clear; stty echo\n"
         }
 
-        surfaceView.createSurface(
-            app: app,
-            tabId: tab.id,
-            workingDirectory: project.path,
-            command: nil,
-            envVars: envVars,
-            initialInput: initialInput
-        )
-
-        project.tabs.append(tab)
-
-        // Overlay to hide stty/clear flash — dismissed by title/pwd callback
+        // Add overlay BEFORE creating surface so no frame renders without it
         let overlay = NSView()
         overlay.wantsLayer = true
         overlay.layer?.backgroundColor = ghosttyApp.defaultBackgroundColor.cgColor
@@ -441,9 +430,20 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
             overlay.trailingAnchor.constraint(equalTo: surfaceView.trailingAnchor),
         ])
         // Safety fallback
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-            overlay.removeFromSuperview()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak overlay] in
+            overlay?.removeFromSuperview()
         }
+
+        surfaceView.createSurface(
+            app: app,
+            tabId: tab.id,
+            workingDirectory: project.path,
+            command: nil,
+            envVars: envVars,
+            initialInput: initialInput
+        )
+
+        project.tabs.append(tab)
     }
 
     func addTabToCurrentProject(isClaude: Bool) {
