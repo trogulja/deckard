@@ -165,8 +165,7 @@ class DeckardGhosttyApp {
 
     /// Returns the ghostty_surface_t for the currently focused tab.
     func focusedSurface() -> ghostty_surface_t? {
-        // This will be wired to the window controller's focused tab
-        return nil // Overridden by windowController connection
+        return AppDelegate.shared?.windowController?.focusedSurface()
     }
 
     // MARK: - Background Color
