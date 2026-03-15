@@ -181,23 +181,65 @@ class ProjectPicker: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTex
     // MARK: - NSTextFieldDelegate
 
     func controlTextDidChange(_ obj: Notification) {
-        let query = searchField.stringValue.lowercased()
+        let query = searchField.stringValue
         if query.isEmpty {
             filteredProjects = allProjects
             spotlightSearch?.terminate()
             spotlightSearch = nil
+        } else if query.hasPrefix("/") || query.hasPrefix("~") {
+            // Path-based autocomplete: list directories at the typed path
+            spotlightSearch?.terminate()
+            spotlightSearch = nil
+            filteredProjects = listDirectories(at: query)
         } else {
-            // Filter Claude projects
-            filteredProjects = allProjects.filter { $0.path.lowercased().contains(query) }
+            // Filter Claude projects by name
+            let lq = query.lowercased()
+            filteredProjects = allProjects.filter { $0.path.lowercased().contains(lq) }
 
             // Also search filesystem via mdfind (Spotlight)
             spotlightSearch?.terminate()
-            searchFilesystem(query: searchField.stringValue)
+            searchFilesystem(query: query)
         }
         tableView.reloadData()
         if !filteredProjects.isEmpty {
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         }
+    }
+
+    private func listDirectories(at input: String) -> [(path: String, lastUsed: Date)] {
+        let expanded = (input as NSString).expandingTildeInPath
+        let fm = FileManager.default
+
+        // If the path is an existing directory, list its subdirectories
+        var isDir: ObjCBool = false
+        if fm.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
+            let parent = expanded.hasSuffix("/") ? expanded : expanded + "/"
+            guard let contents = try? fm.contentsOfDirectory(atPath: expanded) else { return [] }
+            return contents
+                .filter { !$0.hasPrefix(".") }
+                .map { parent + $0 }
+                .filter { path in
+                    var d: ObjCBool = false
+                    return fm.fileExists(atPath: path, isDirectory: &d) && d.boolValue
+                }
+                .sorted()
+                .map { (path: $0, lastUsed: .distantPast) }
+        }
+
+        // Otherwise, treat as partial path: list parent dir filtered by prefix
+        let parentDir = (expanded as NSString).deletingLastPathComponent
+        let prefix = (expanded as NSString).lastPathComponent.lowercased()
+        guard fm.fileExists(atPath: parentDir, isDirectory: &isDir), isDir.boolValue else { return [] }
+        guard let contents = try? fm.contentsOfDirectory(atPath: parentDir) else { return [] }
+        return contents
+            .filter { !$0.hasPrefix(".") && $0.lowercased().hasPrefix(prefix) }
+            .map { (parentDir as NSString).appendingPathComponent($0) }
+            .filter { path in
+                var d: ObjCBool = false
+                return fm.fileExists(atPath: path, isDirectory: &d) && d.boolValue
+            }
+            .sorted()
+            .map { (path: $0, lastUsed: .distantPast) }
     }
 
     private func searchFilesystem(query: String) {
