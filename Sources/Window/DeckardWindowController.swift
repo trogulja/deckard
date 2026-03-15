@@ -113,6 +113,28 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         }
 
         setupUI()
+
+        // Startup overlay — covers the whole terminal area to hide shell init flash
+        let startupOverlay = NSView()
+        startupOverlay.wantsLayer = true
+        startupOverlay.layer?.backgroundColor = ghosttyApp.defaultBackgroundColor.cgColor
+        startupOverlay.translatesAutoresizingMaskIntoConstraints = false
+        terminalContainerView.addSubview(startupOverlay)
+        NSLayoutConstraint.activate([
+            startupOverlay.topAnchor.constraint(equalTo: terminalContainerView.topAnchor),
+            startupOverlay.bottomAnchor.constraint(equalTo: terminalContainerView.bottomAnchor),
+            startupOverlay.leadingAnchor.constraint(equalTo: terminalContainerView.leadingAnchor),
+            startupOverlay.trailingAnchor.constraint(equalTo: terminalContainerView.trailingAnchor),
+        ])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.3
+                startupOverlay.animator().alphaValue = 0
+            }, completionHandler: {
+                startupOverlay.removeFromSuperview()
+            })
+        }
+
         restoreOrCreateInitial()
 
         // If no projects after restore, auto-show the project picker
