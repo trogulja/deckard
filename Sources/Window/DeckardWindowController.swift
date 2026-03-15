@@ -80,6 +80,8 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     private let rightPane = NSView()
     private let tabBar = ReorderableHStackView()  // horizontal tab bar
     private let terminalContainerView = NSView()
+    private let contextStatusBar = NSTextField(labelWithString: "")
+    private var contextTimer: Timer?
     private var currentTerminalView: TerminalNSView?
     private var welcomeLabel: NSTextField?
 
@@ -233,7 +235,23 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
             terminalContainerView.topAnchor.constraint(equalTo: tabBar.bottomAnchor),
             terminalContainerView.leadingAnchor.constraint(equalTo: rightPane.leadingAnchor),
             terminalContainerView.trailingAnchor.constraint(equalTo: rightPane.trailingAnchor),
-            terminalContainerView.bottomAnchor.constraint(equalTo: rightPane.bottomAnchor),
+            terminalContainerView.bottomAnchor.constraint(equalTo: contextStatusBar.topAnchor),
+        ])
+
+        // Context usage status bar at the bottom
+        contextStatusBar.translatesAutoresizingMaskIntoConstraints = false
+        contextStatusBar.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+        contextStatusBar.textColor = .secondaryLabelColor
+        contextStatusBar.alignment = .right
+        contextStatusBar.wantsLayer = true
+        contextStatusBar.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.9).cgColor
+        contextStatusBar.isHidden = true
+        rightPane.addSubview(contextStatusBar)
+        NSLayoutConstraint.activate([
+            contextStatusBar.leadingAnchor.constraint(equalTo: rightPane.leadingAnchor),
+            contextStatusBar.trailingAnchor.constraint(equalTo: rightPane.trailingAnchor),
+            contextStatusBar.bottomAnchor.constraint(equalTo: rightPane.bottomAnchor),
+            contextStatusBar.heightAnchor.constraint(equalToConstant: 18),
         ])
 
         splitView.addArrangedSubview(sidebarView)
@@ -536,6 +554,68 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         }
 
         window?.makeFirstResponder(view)
+
+        // Show context bar for Claude tabs
+        refreshContextBar(for: tab)
+    }
+
+    private func refreshContextBar(for tab: TabItem) {
+        contextTimer?.invalidate()
+        contextTimer = nil
+
+        let showBar = UserDefaults.standard.object(forKey: "showContextBar") as? Bool ?? true
+        if tab.isClaude && showBar {
+            contextStatusBar.isHidden = false
+            updateContextUsage(for: tab)
+            contextTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+                self?.updateContextUsage(for: tab)
+            }
+        } else {
+            contextStatusBar.isHidden = true
+        }
+    }
+
+    func toggleContextBar() {
+        let current = UserDefaults.standard.object(forKey: "showContextBar") as? Bool ?? true
+        UserDefaults.standard.set(!current, forKey: "showContextBar")
+        if let project = currentProject {
+            let tab = project.tabs[project.selectedTabIndex]
+            refreshContextBar(for: tab)
+        }
+    }
+
+    private func updateContextUsage(for tab: TabItem) {
+        guard let sessionId = tab.sessionId,
+              let project = currentProject else {
+            contextStatusBar.stringValue = "  Context: waiting...  "
+            return
+        }
+
+        guard let usage = ContextMonitor.shared.getUsage(sessionId: sessionId, projectPath: project.path) else {
+            contextStatusBar.stringValue = "  Context: loading...  "
+            return
+        }
+
+        let pct = Int(usage.percentage)
+        let color: NSColor
+        switch pct {
+        case 0..<50: color = .systemGreen
+        case 50..<75: color = .systemYellow
+        case 75..<90: color = .systemOrange
+        default: color = .systemRed
+        }
+
+        let text = "  Context: \(usage.displayString)  "
+        let attr = NSMutableAttributedString(string: text)
+        let fullRange = NSRange(location: 0, length: attr.length)
+        attr.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: 10, weight: .regular), range: fullRange)
+        attr.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: fullRange)
+        if let range = text.range(of: "(\(pct)%)") {
+            let nsRange = NSRange(range, in: text)
+            attr.addAttribute(.foregroundColor, value: color, range: nsRange)
+            attr.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: 10, weight: .bold), range: nsRange)
+        }
+        contextStatusBar.attributedStringValue = attr
     }
 
     func focusedSurface() -> ghostty_surface_t? {

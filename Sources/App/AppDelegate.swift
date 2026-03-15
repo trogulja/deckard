@@ -152,6 +152,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // View menu
         let viewMenuItem = NSMenuItem()
         let viewMenu = NSMenu(title: "View")
+        let contextBarItem = NSMenuItem(title: "Show Context Usage", action: #selector(toggleContextBar), keyEquivalent: "")
+        contextBarItem.state = (UserDefaults.standard.object(forKey: "showContextBar") as? Bool ?? true) ? .on : .off
+        viewMenu.addItem(contextBarItem)
         viewMenuItem.submenu = viewMenu
         mainMenu.addItem(viewMenuItem)
 
@@ -200,6 +203,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func duplicateTab() {
         windowController?.duplicateCurrentTab()
+    }
+
+    @objc private func toggleContextBar(_ sender: NSMenuItem) {
+        windowController?.toggleContextBar()
+        sender.state = (UserDefaults.standard.object(forKey: "showContextBar") as? Bool ?? true) ? .on : .off
     }
 
     @objc private func selectNextTab() {

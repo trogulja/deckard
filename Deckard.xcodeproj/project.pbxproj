@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0D4C913A8846099ED84D5816 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F505D5B7348F40C2CBD6F83 /* AppDelegate.swift */; };
 		2D322E22D0679FD39D688539 /* SessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE2AA0719D32ACCD1549184 /* SessionState.swift */; };
+		2E4FF6C3438B5F0E73C4FA87 /* ContextMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FD7F070DDB4216278EFDE6 /* ContextMonitor.swift */; };
 		37FA9D946FD6ECA1DDF5898A /* DeckardWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8391EFB62A21AFA1DA62733F /* DeckardWindowController.swift */; };
 		41C3D848646ABF112104F6A4 /* DeckardGhosttyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A605D524B1CC5AAC25147C77 /* DeckardGhosttyApp.swift */; };
 		432752F9187D2E815F617B96 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88AA91CDBC6DDE958543FB29 /* main.swift */; };
@@ -34,12 +35,14 @@
 		A605D524B1CC5AAC25147C77 /* DeckardGhosttyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckardGhosttyApp.swift; sourceTree = "<group>"; };
 		D08100E22096E7498D571A20 /* ControlSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlSocket.swift; sourceTree = "<group>"; };
 		DD37F7C8CC5243DCF0A1346E /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
+		E5FD7F070DDB4216278EFDE6 /* ContextMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextMonitor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
 		2BEC93BB5439FAC18DD504BA /* Detection */ = {
 			isa = PBXGroup;
 			children = (
+				E5FD7F070DDB4216278EFDE6 /* ContextMonitor.swift */,
 				4A2B375A023FEBCB272DCFD7 /* HookHandler.swift */,
 				A5EB9FA577948DC32DED47B7 /* NotificationManager.swift */,
 			);
@@ -215,6 +218,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0D4C913A8846099ED84D5816 /* AppDelegate.swift in Sources */,
+				2E4FF6C3438B5F0E73C4FA87 /* ContextMonitor.swift in Sources */,
 				7E500DC8ECF3F7D073A098A4 /* ControlSocket.swift in Sources */,
 				41C3D848646ABF112104F6A4 /* DeckardGhosttyApp.swift in Sources */,
 				37FA9D946FD6ECA1DDF5898A /* DeckardWindowController.swift in Sources */,
