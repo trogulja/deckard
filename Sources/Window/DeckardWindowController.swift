@@ -212,6 +212,20 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         ])
         self.welcomeLabel = welcome
 
+        // Full-width 1px divider below the title bar / tab bar area
+        let divider = NSView()
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        divider.wantsLayer = true
+        divider.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        contentView.addSubview(divider)
+
+        NSLayoutConstraint.activate([
+            divider.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 28),
+            divider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            divider.heightAnchor.constraint(equalToConstant: 1),
+        ])
+
         sidebarView.widthAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
 
         DispatchQueue.main.async { [self] in
