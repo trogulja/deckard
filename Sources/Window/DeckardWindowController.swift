@@ -108,6 +108,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
+        window.isMovableByWindowBackground = false
 
         super.init(window: window)
 
