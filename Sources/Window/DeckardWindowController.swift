@@ -1179,10 +1179,10 @@ class HorizontalTabView: NSView, NSTextFieldDelegate {
         ]
 
         if let dot = badgeDot {
-            constraints.append(dot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8))
-            constraints.append(label.trailingAnchor.constraint(lessThanOrEqualTo: dot.leadingAnchor, constant: -4))
+            constraints.append(dot.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 5))
+            constraints.append(dot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6))
         } else {
-            constraints.append(label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8))
+            constraints.append(label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6))
         }
 
         NSLayoutConstraint.activate(constraints)
