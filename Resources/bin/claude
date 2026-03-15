@@ -36,12 +36,11 @@ for arg in "$@"; do
     esac
 done
 
-# Bake the current values into the hook helper so they're available
-# even if Claude Code doesn't pass the full environment to hook commands.
+# Create a per-surface hook helper so each tab gets its own hooks.
 SURFACE_ID="$DECKARD_SURFACE_ID"
 SOCKET_PATH="$DECKARD_SOCKET_PATH"
+HOOK_HELPER="/tmp/deckard-hook-${SURFACE_ID}.sh"
 
-HOOK_HELPER="/tmp/deckard-hook-$(id -u).sh"
 cat > "$HOOK_HELPER" << HOOKEOF
 #!/bin/bash
 EVENT="\$1"
@@ -51,14 +50,11 @@ SOCKET="$SOCKET_PATH"
 
 EXTRA=""
 if [[ "\$EVENT" == "session-start" ]]; then
-    # Find the session ID from Claude's session files.
-    # Try PPID first (Claude Code's PID), then search recent files.
     SESSION_FILE="\$HOME/.claude/sessions/\$PPID.json"
     if [[ -f "\$SESSION_FILE" ]]; then
         SID=\$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['sessionId'])" "\$SESSION_FILE" 2>/dev/null)
     fi
     if [[ -z "\$SID" ]]; then
-        # Fallback: search the most recent session files for a running process
         for f in \$(ls -t "\$HOME/.claude/sessions/"*.json 2>/dev/null | head -5); do
             CPID=\$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['pid'])" "\$f" 2>/dev/null)
             if [[ -n "\$CPID" ]] && kill -0 "\$CPID" 2>/dev/null; then

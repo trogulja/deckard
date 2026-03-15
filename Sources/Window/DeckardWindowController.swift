@@ -559,7 +559,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     func updateBadge(forSurfaceId surfaceIdStr: String, state: TabItem.BadgeState) {
         guard let tab = tabForSurfaceId(surfaceIdStr) else { return }
         tab.badgeState = state
-        // Update tab bar button if this is the current project
+        rebuildSidebar()
         rebuildTabBar()
     }
 
@@ -683,7 +683,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         for (i, project) in projects.enumerated() {
             let row = TabRowView(title: project.name, bold: false, index: i,
                                  target: self, action: #selector(projectRowClicked(_:)))
-            row.badgeState = worstBadge(in: project)
+            row.badgeStates = project.tabs.filter { $0.isClaude }.map { $0.badgeState }
             row.onRename = { [weak self] newName in
                 guard let self = self, i < self.projects.count else { return }
                 self.projects[i].name = newName
@@ -705,19 +705,6 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         }
 
         updateSidebarSelection()
-    }
-
-    private func worstBadge(in project: ProjectItem) -> TabItem.BadgeState {
-        var worst: TabItem.BadgeState = .none
-        for tab in project.tabs {
-            switch tab.badgeState {
-            case .needsPermission: return .needsPermission
-            case .waitingForInput: worst = .waitingForInput
-            case .thinking where worst == .none: worst = .thinking
-            default: break
-            }
-        }
-        return worst
     }
 
     private func updateSidebarSelection() {
@@ -744,12 +731,14 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
 
         for (i, tab) in project.tabs.enumerated() {
             let isSelected = (i == project.selectedTabIndex)
-            let icon = tab.isClaude ? "\u{2726}" : "$"  // ✦ for Claude, $ for terminal
-            let title = " \(icon) \(tab.name) "
+            let icon = tab.isClaude ? "" : "$ "  // Claude tabs use badge dot instead
+            let title = " \(icon)\(tab.name) "
 
             let tabView = HorizontalTabView(
                 displayTitle: title,
                 editableName: tab.name,
+                isClaude: tab.isClaude,
+                badgeState: tab.isClaude ? tab.badgeState : .none,
                 isSelected: isSelected,
                 index: i,
                 target: self,
@@ -847,33 +836,21 @@ class TabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
     var isSelected: Bool = false {
         didSet { needsDisplay = true }
     }
-    var badgeState: TabItem.BadgeState = .none {
-        didSet {
-            badgeDot.layer?.backgroundColor = badgeColor.cgColor
-            badgeDot.needsDisplay = true
-        }
+    /// Badge states for each Claude tab in this project, shown as right-aligned dots.
+    var badgeStates: [TabItem.BadgeState] = [] {
+        didSet { updateBadgeDots() }
     }
     var onRename: ((String) -> Void)?
-    var onClearName: (() -> Void)?  // called when user enters empty name
+    var onClearName: (() -> Void)?
     var onClose: (() -> Void)?
     var onReorder: ((Int, Int) -> Void)?
     let index: Int
     private let label: NSTextField
-    private let badgeDot: NSView
+    private let badgeContainer: NSStackView
     private let closeButton: NSButton
     private weak var target: AnyObject?
     private let action: Selector
     private var dragStartPoint: NSPoint?
-
-    private var badgeColor: NSColor {
-        switch badgeState {
-        case .none: return .clear
-        case .thinking: return NSColor(red: 0.85, green: 0.65, blue: 0.2, alpha: 1.0)
-        case .waitingForInput: return .systemBlue
-        case .needsPermission: return .systemOrange
-        case .error: return .systemRed
-        }
-    }
 
     init(title: String, bold: Bool, index: Int, target: AnyObject, action: Selector) {
         self.title = title
@@ -881,16 +858,16 @@ class TabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         self.target = target
         self.action = action
 
-        badgeDot = NSView()
-        badgeDot.wantsLayer = true
-        badgeDot.layer?.cornerRadius = 3.5
-        badgeDot.layer?.backgroundColor = NSColor.clear.cgColor
-
         label = NSTextField(labelWithString: title)
         label.font = bold ? .boldSystemFont(ofSize: 12) : .systemFont(ofSize: 12)
         label.textColor = .labelColor
         label.lineBreakMode = .byTruncatingTail
         label.maximumNumberOfLines = 1
+
+        badgeContainer = NSStackView()
+        badgeContainer.orientation = .horizontal
+        badgeContainer.spacing = 3
+        badgeContainer.setContentHuggingPriority(.required, for: .horizontal)
 
         closeButton = NSButton(title: "\u{00D7}", target: nil, action: nil)
         closeButton.bezelStyle = .recessed
@@ -905,29 +882,26 @@ class TabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         closeButton.target = self
         closeButton.action = #selector(closeClicked)
 
-        badgeDot.translatesAutoresizingMaskIntoConstraints = false
         label.translatesAutoresizingMaskIntoConstraints = false
+        badgeContainer.translatesAutoresizingMaskIntoConstraints = false
         closeButton.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(badgeDot)
         addSubview(label)
+        addSubview(badgeContainer)
         addSubview(closeButton)
-        closeButton.isHidden = true  // only show on hover
+        closeButton.isHidden = true
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 28),
-            badgeDot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            badgeDot.centerYAnchor.constraint(equalTo: centerYAnchor),
-            badgeDot.widthAnchor.constraint(equalToConstant: 7),
-            badgeDot.heightAnchor.constraint(equalToConstant: 7),
-            label.leadingAnchor.constraint(equalTo: badgeDot.trailingAnchor, constant: 6),
-            label.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -4),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: badgeContainer.leadingAnchor, constant: -4),
+            badgeContainer.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -4),
+            badgeContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
             closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             closeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             closeButton.widthAnchor.constraint(equalToConstant: 16),
         ])
 
-        // Track mouse for hover
         let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self)
         addTrackingArea(area)
     }
@@ -947,6 +921,32 @@ class TabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
 
     override func mouseExited(with event: NSEvent) {
         closeButton.isHidden = true
+    }
+
+    private func updateBadgeDots() {
+        badgeContainer.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for state in badgeStates where state != .none {
+            let dot = NSView()
+            dot.wantsLayer = true
+            dot.layer?.cornerRadius = 3.5
+            dot.layer?.backgroundColor = Self.colorForBadge(state).cgColor
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                dot.widthAnchor.constraint(equalToConstant: 7),
+                dot.heightAnchor.constraint(equalToConstant: 7),
+            ])
+            badgeContainer.addArrangedSubview(dot)
+        }
+    }
+
+    static func colorForBadge(_ state: TabItem.BadgeState) -> NSColor {
+        switch state {
+        case .none: return .clear
+        case .thinking: return NSColor(red: 0.85, green: 0.65, blue: 0.2, alpha: 1.0)
+        case .waitingForInput: return .systemBlue
+        case .needsPermission: return .systemOrange
+        case .error: return .systemRed
+        }
     }
 
     @objc private func closeClicked() {
@@ -1049,8 +1049,11 @@ class HorizontalTabView: NSView, NSTextFieldDelegate {
     private var displayTitle: String
     private var editWidthConstraint: NSLayoutConstraint?
 
-    init(displayTitle: String, editableName: String, isSelected: Bool, index: Int, target: AnyObject,
-         clickAction: Selector, closeAction: Selector) {
+    private var badgeDot: NSView?
+
+    init(displayTitle: String, editableName: String, isClaude: Bool = false,
+         badgeState: TabItem.BadgeState = .none, isSelected: Bool, index: Int,
+         target: AnyObject, clickAction: Selector, closeAction: Selector) {
         self.index = index
         self.isSelected = isSelected
         self.target = target
@@ -1065,7 +1068,7 @@ class HorizontalTabView: NSView, NSTextFieldDelegate {
         label.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         label.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
 
-        closeButton = NSButton(title: "\u{00D7}", target: nil, action: nil)  // ×
+        closeButton = NSButton(title: "\u{00D7}", target: nil, action: nil)
         closeButton.bezelStyle = .recessed
         closeButton.isBordered = false
         closeButton.font = .systemFont(ofSize: 13)
@@ -1077,8 +1080,24 @@ class HorizontalTabView: NSView, NSTextFieldDelegate {
 
         closeButton.target = target
         closeButton.action = closeAction
-        // Store index on close button via tag
         closeButton.tag = index
+
+        // Badge dot for Claude tabs (replaces the unicode icon)
+        if isClaude {
+            let dot = NSView()
+            dot.wantsLayer = true
+            dot.layer?.cornerRadius = 3.5
+            dot.layer?.backgroundColor = TabRowView.colorForBadge(badgeState).cgColor
+            dot.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(dot)
+            NSLayoutConstraint.activate([
+                dot.widthAnchor.constraint(equalToConstant: 7),
+                dot.heightAnchor.constraint(equalToConstant: 7),
+                dot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+                dot.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+            badgeDot = dot
+        }
 
         label.translatesAutoresizingMaskIntoConstraints = false
         closeButton.translatesAutoresizingMaskIntoConstraints = false
@@ -1086,9 +1105,13 @@ class HorizontalTabView: NSView, NSTextFieldDelegate {
         addSubview(closeButton)
         closeButton.isHidden = true
 
+        let labelLeading = badgeDot != nil
+            ? label.leadingAnchor.constraint(equalTo: badgeDot!.trailingAnchor, constant: 5)
+            : label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8)
+
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 28),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            labelLeading,
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             closeButton.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 2),
             closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
