@@ -643,6 +643,9 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
                 self.projects[i].name = newName
                 self.saveState()
             }
+            row.onClose = { [weak self] in
+                self?.closeProject(at: i)
+            }
             sidebarStackView.addArrangedSubview(row)
             row.leadingAnchor.constraint(equalTo: sidebarStackView.leadingAnchor).isActive = true
             row.trailingAnchor.constraint(equalTo: sidebarStackView.trailingAnchor).isActive = true
@@ -788,10 +791,12 @@ class TabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         }
     }
     var onRename: ((String) -> Void)?
-    var onReorder: ((Int, Int) -> Void)?  // (fromIndex, toIndex)
+    var onClose: (() -> Void)?
+    var onReorder: ((Int, Int) -> Void)?
     let index: Int
     private let label: NSTextField
     private let badgeDot: NSView
+    private let closeButton: NSButton
     private weak var target: AnyObject?
     private let action: Selector
     private var dragStartPoint: NSPoint?
@@ -823,14 +828,25 @@ class TabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         label.lineBreakMode = .byTruncatingTail
         label.maximumNumberOfLines = 1
 
+        closeButton = NSButton(title: "\u{00D7}", target: nil, action: nil)
+        closeButton.bezelStyle = .recessed
+        closeButton.isBordered = false
+        closeButton.font = .systemFont(ofSize: 13)
+        closeButton.contentTintColor = .tertiaryLabelColor
+
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
 
+        closeButton.target = self
+        closeButton.action = #selector(closeClicked)
+
         badgeDot.translatesAutoresizingMaskIntoConstraints = false
         label.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
         addSubview(badgeDot)
         addSubview(label)
+        addSubview(closeButton)
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 28),
@@ -839,8 +855,11 @@ class TabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
             badgeDot.widthAnchor.constraint(equalToConstant: 7),
             badgeDot.heightAnchor.constraint(equalToConstant: 7),
             label.leadingAnchor.constraint(equalTo: badgeDot.trailingAnchor, constant: 6),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            label.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -4),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            closeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            closeButton.widthAnchor.constraint(equalToConstant: 16),
         ])
     }
 
@@ -851,6 +870,10 @@ class TabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
             NSColor.selectedContentBackgroundColor.withAlphaComponent(0.3).setFill()
             bounds.fill()
         }
+    }
+
+    @objc private func closeClicked() {
+        onClose?()
     }
 
     override func mouseDown(with event: NSEvent) {
