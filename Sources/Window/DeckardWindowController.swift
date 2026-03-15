@@ -425,6 +425,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         } else {
             project.selectedTabIndex = min(idx, project.tabs.count - 1)
             rebuildTabBar()
+            rebuildSidebar()
             showTab(project.tabs[project.selectedTabIndex])
         }
         saveState()
@@ -519,7 +520,10 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
                 } else if pi == selectedProjectIndex {
                     project.selectedTabIndex = min(project.selectedTabIndex, project.tabs.count - 1)
                     rebuildTabBar()
+                    rebuildSidebar()
                     showTab(project.tabs[project.selectedTabIndex])
+                } else {
+                    rebuildSidebar()
                 }
                 return
             }

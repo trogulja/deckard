@@ -277,8 +277,8 @@ class ProjectPicker: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTex
             }
         }
 
-        // Sort by number of sessions (most first), then by recency as tiebreaker
-        results.sort { $0.sessionCount != $1.sessionCount ? $0.sessionCount > $1.sessionCount : $0.lastUsed > $1.lastUsed }
+        // Sort by most recent session first
+        results.sort { $0.lastUsed > $1.lastUsed }
         return results.map { (path: $0.path, lastUsed: $0.lastUsed) }
     }
 
