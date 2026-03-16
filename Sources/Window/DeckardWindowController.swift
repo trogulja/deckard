@@ -507,7 +507,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
                 initialInput = "\(prefix)claude\(extraArgsSuffix)\n"
             }
         } else {
-            initialInput = "stty -echo; clear; stty echo\n"
+            initialInput = nil
         }
 
         // Only Claude tabs need the overlay (hides stty/clear setup until CLI sets title).
@@ -663,8 +663,22 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
 
     private func updateContextUsage(for tab: TabItem) {
         guard let sessionId = tab.sessionId,
-              let project = currentProject,
-              let usage = ContextMonitor.shared.getUsage(sessionId: sessionId, projectPath: project.path) else {
+              let project = currentProject else {
+            applyContextUsage(nil)
+            return
+        }
+
+        let projectPath = project.path
+        DispatchQueue.global(qos: .utility).async {
+            let usage = ContextMonitor.shared.getUsage(sessionId: sessionId, projectPath: projectPath)
+            DispatchQueue.main.async { [weak self] in
+                self?.applyContextUsage(usage)
+            }
+        }
+    }
+
+    private func applyContextUsage(_ usage: ContextMonitor.ContextUsage?) {
+        guard let usage = usage else {
             progressWidthConstraint?.isActive = false
             progressWidthConstraint = contextProgressFill.widthAnchor.constraint(equalToConstant: 0)
             progressWidthConstraint?.isActive = true

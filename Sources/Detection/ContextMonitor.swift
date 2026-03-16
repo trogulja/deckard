@@ -17,7 +17,6 @@ class ContextMonitor {
         let inputTokens: Int
         let cacheReadTokens: Int
         let contextLimit: Int
-        let turnCount: Int
 
         var contextUsed: Int { inputTokens + cacheReadTokens }
         var percentage: Double {
@@ -25,18 +24,6 @@ class ContextMonitor {
             return Double(contextUsed) / Double(contextLimit) * 100
         }
 
-        var shortModel: String {
-            if model.contains("opus") { return "opus" }
-            if model.contains("sonnet") { return "sonnet" }
-            if model.contains("haiku") { return "haiku" }
-            return model
-        }
-
-        var contextString: String {
-            let usedStr = contextUsed >= 1_000_000 ? "\(contextUsed / 1_000_000)M" : "\(contextUsed / 1000)k"
-            let limitStr = contextLimit >= 1_000_000 ? "\(contextLimit / 1_000_000)M" : "\(contextLimit / 1000)k"
-            return "\(usedStr)/\(limitStr) (\(Int(percentage))%)"
-        }
     }
 
     struct SessionInfo {
@@ -104,33 +91,32 @@ class ContextMonitor {
     }
 
     /// Get context usage for a session by reading its JSONL file.
+    /// Only reads the tail of the file to find the most recent usage entry.
     func getUsage(sessionId: String, projectPath: String) -> ContextUsage? {
         let encoded = projectPath.replacingOccurrences(of: "/", with: "-")
         let jsonlPath = NSHomeDirectory() + "/.claude/projects/\(encoded)/\(sessionId).jsonl"
 
-        guard FileManager.default.fileExists(atPath: jsonlPath) else { return nil }
+        guard let fh = FileHandle(forReadingAtPath: jsonlPath) else { return nil }
+        defer { try? fh.close() }
+
+        let fileSize = fh.seekToEndOfFile()
+        guard fileSize > 0 else { return nil }
+
+        // --- Find last usage: read only the tail of the file ---
+        // Usage entries appear near the end. Read the last 64KB (enough for
+        // several assistant response entries).
+        let tailSize: UInt64 = 64 * 1024
+        let tailOffset = fileSize > tailSize ? fileSize - tailSize : 0
+        fh.seek(toFileOffset: tailOffset)
+        let tailData = fh.readData(ofLength: Int(fileSize - tailOffset))
+        guard let tailContent = String(data: tailData, encoding: .utf8) else { return nil }
 
         var lastInput = 0
         var lastCacheRead = 0
         var model = ""
-        var turnCount = 0
 
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: jsonlPath)) else { return nil }
-        guard let content = String(data: data, encoding: .utf8) else { return nil }
-
-        let lines = content.components(separatedBy: "\n")
-
-        // Forward pass: count user turns
-        for line in lines {
-            guard !line.isEmpty else { continue }
-            guard let lineData = line.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
-
-            let type = json["type"] as? String ?? ""
-            if type == "user" { turnCount += 1 }
-        }
-
-        // Reverse pass: find last usage
+        // Split tail into lines and scan in reverse for the last usage entry
+        let lines = tailContent.components(separatedBy: "\n")
         for line in lines.reversed() {
             guard !line.isEmpty else { continue }
             guard let lineData = line.data(using: .utf8),
@@ -164,7 +150,6 @@ class ContextMonitor {
             inputTokens: lastInput,
             cacheReadTokens: lastCacheRead,
             contextLimit: limit,
-            turnCount: turnCount
         )
     }
 }

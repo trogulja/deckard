@@ -1,5 +1,5 @@
 import AppKit
-import Carbon
+import Carbon.HIToolbox
 import GhosttyKit
 
 /// Callback context stored as the surface's userdata.
@@ -27,6 +27,9 @@ class TerminalNSView: NSView {
     private var eventMonitor: Any?
     private var markedText = NSMutableAttributedString()
     private var keyTextAccumulator: [String]?
+    /// Tracks the last keyUp event number handled, to prevent double delivery
+    /// from both the local event monitor and the normal responder chain.
+    private var lastHandledKeyUpEventNumber: Int = -1
 
     var title: String = ""
     var pwd: String?
@@ -483,6 +486,11 @@ class TerminalNSView: NSView {
     }
 
     override func keyUp(with event: NSEvent) {
+        // Deduplicate: the local event monitor (line 46) and the normal responder
+        // chain can both deliver the same keyUp event.
+        guard event.eventNumber != lastHandledKeyUpEventNumber else { return }
+        lastHandledKeyUpEventNumber = event.eventNumber
+
         guard let surface = self.surface else { return }
         var input = ghosttyKeyInput(for: event)
         input.action = GHOSTTY_ACTION_RELEASE
