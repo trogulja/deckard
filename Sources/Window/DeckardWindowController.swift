@@ -132,6 +132,9 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         window.title = "Deckard"
         window.minSize = NSSize(width: 600, height: 400)
         window.backgroundColor = ThemeManager.shared.currentColors.background
+        window.titlebarAppearsTransparent = true
+        window.appearance = ThemeManager.shared.currentColors.isDark
+            ? NSAppearance(named: .darkAqua) : NSAppearance(named: .aqua)
         window.tabbingMode = .disallowed
 
         super.init(window: window)
@@ -753,6 +756,8 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     private func applyThemeColors(_ colors: ThemeColors) {
         currentThemeColors = colors
         window?.backgroundColor = colors.background
+        window?.appearance = colors.isDark
+            ? NSAppearance(named: .darkAqua) : NSAppearance(named: .aqua)
         sidebarView.layer?.backgroundColor = colors.sidebarBackground.cgColor
         tabBar.layer?.backgroundColor = colors.tabBarBackground.cgColor
         rebuildSidebar()

@@ -278,17 +278,18 @@ class DeckardGhosttyApp {
         updateDefaultBackground(from: newConfig)
         updateDefaultForeground(from: newConfig)
 
+        // Update app config first, then each surface individually
         ghostty_app_update_config(app, newConfig)
-
-        // Update each existing surface so terminals pick up the new theme
         if let wc = AppDelegate.shared?.windowController {
             wc.forEachSurface { surface in
                 ghostty_surface_update_config(surface, newConfig)
             }
         }
 
-        if let old = self.config { ghostty_config_free(old) }
+        // Free old config AFTER all updates are done
+        let oldConfig = self.config
         self.config = newConfig
+        if let oldConfig { ghostty_config_free(oldConfig) }
     }
 
     // MARK: - Action Handling
