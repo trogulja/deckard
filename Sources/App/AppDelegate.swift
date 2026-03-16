@@ -16,7 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // ~1.5s on MTLCopyAllDevices(). Warming the device cache here means it's
         // already done by the time surfaces are created in didFinishLaunching.
         DispatchQueue.global(qos: .userInitiated).async {
-            let _ = MTLCreateSystemDefaultDevice()
+            _ = MTLCreateSystemDefaultDevice()
         }
     }
 
