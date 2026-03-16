@@ -303,6 +303,7 @@ class TerminalNSView: NSView {
         // Check if ghostty handles this as a keybinding
         var flags: ghostty_binding_flags_e = ghostty_binding_flags_e(rawValue: 0)
         if ghostty_surface_key_is_binding(surface, input, &flags) {
+            if hasMarkedText() { return }
             _ = ghostty_surface_key(surface, input)
             return
         }
@@ -315,10 +316,15 @@ class TerminalNSView: NSView {
             return
         }
 
+        let markedTextBefore = markedText.length > 0
+
         // Use macOS text input system for proper text handling
         // (Shift+letters, dead keys, Option+key combos, IME, etc.)
         keyTextAccumulator = []
         interpretKeyEvents([event])
+
+        // Sync preedit state (dead key accent overlay) with ghostty
+        syncPreedit(clearIfNeeded: markedTextBefore)
 
         if let texts = keyTextAccumulator, !texts.isEmpty {
             let text = texts.joined()
@@ -330,7 +336,8 @@ class TerminalNSView: NSView {
                 _ = ghostty_surface_key(surface, input)
             }
         } else {
-            // No text produced — raw key event (arrows, function keys, etc.)
+            // No text produced — composing or raw key event
+            input.composing = markedText.length > 0 || markedTextBefore
             _ = ghostty_surface_key(surface, input)
         }
         keyTextAccumulator = nil
@@ -385,16 +392,23 @@ class TerminalNSView: NSView {
         return false
     }
 
-    // MARK: - Text Input (NSResponder)
-
-    override func insertText(_ insertString: Any) {
-        if let str = insertString as? String {
-            keyTextAccumulator?.append(str)
-        }
-    }
-
     override func doCommand(by selector: Selector) {
         // Intentionally empty — prevents NSBeep for unhandled keys
+    }
+
+    private func syncPreedit(clearIfNeeded: Bool = true) {
+        guard let surface = self.surface else { return }
+        if markedText.length > 0 {
+            let str = markedText.string
+            let len = str.utf8CString.count
+            if len > 0 {
+                str.withCString { ptr in
+                    ghostty_surface_preedit(surface, ptr, UInt(len - 1))
+                }
+            }
+        } else if clearIfNeeded {
+            ghostty_surface_preedit(surface, nil, 0)
+        }
     }
 
     // MARK: - Drag and Drop
@@ -478,5 +492,87 @@ class TerminalNSView: NSView {
     static func ghosttyKey(from event: NSEvent) -> ghostty_input_key_e {
         // libghostty handles keycode-to-key translation internally
         return GHOSTTY_KEY_UNIDENTIFIED
+    }
+}
+
+// MARK: - NSTextInputClient
+
+extension TerminalNSView: NSTextInputClient {
+    func hasMarkedText() -> Bool {
+        return markedText.length > 0
+    }
+
+    func markedRange() -> NSRange {
+        guard markedText.length > 0 else { return NSRange() }
+        return NSRange(location: 0, length: markedText.length)
+    }
+
+    func selectedRange() -> NSRange {
+        return NSRange()
+    }
+
+    func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        switch string {
+        case let v as NSAttributedString:
+            self.markedText = NSMutableAttributedString(attributedString: v)
+        case let v as String:
+            self.markedText = NSMutableAttributedString(string: v)
+        default:
+            break
+        }
+
+        // If called outside keyDown (e.g. keyboard layout change during compose),
+        // sync preedit immediately.
+        if keyTextAccumulator == nil {
+            syncPreedit()
+        }
+    }
+
+    func unmarkText() {
+        if markedText.length > 0 {
+            markedText.mutableString.setString("")
+            syncPreedit()
+        }
+    }
+
+    func validAttributesForMarkedText() -> [NSAttributedString.Key] {
+        return []
+    }
+
+    func attributedSubstring(forProposedRange range: NSRange, actualRange: NSRangePointer?) -> NSAttributedString? {
+        return nil
+    }
+
+    func characterIndex(for point: NSPoint) -> Int {
+        return 0
+    }
+
+    func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
+        guard let surface = self.surface else {
+            return NSRect(x: frame.origin.x, y: frame.origin.y, width: 0, height: 0)
+        }
+        var x: Double = 0
+        var y: Double = 0
+        var w: Double = 0
+        var h: Double = 0
+        ghostty_surface_ime_point(surface, &x, &y, &w, &h)
+        let viewRect = NSRect(x: x, y: frame.size.height - y, width: w, height: max(h, 1))
+        let winRect = convert(viewRect, to: nil)
+        guard let window = self.window else { return winRect }
+        return window.convertToScreen(winRect)
+    }
+
+    func insertText(_ string: Any, replacementRange: NSRange) {
+        var chars = ""
+        switch string {
+        case let v as NSAttributedString:
+            chars = v.string
+        case let v as String:
+            chars = v
+        default:
+            return
+        }
+        unmarkText()
+        keyTextAccumulator?.append(chars)
     }
 }
