@@ -76,6 +76,6 @@ printf '{"command":"hook.%s","surfaceId":"%s"%s}\n' "\$EVENT" "\$SURFACE" "\$EXT
 HOOKEOF
 chmod +x "$HOOK_HELPER"
 
-HOOKS_JSON="{\"hooks\":{\"SessionStart\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_HELPER session-start\",\"timeout\":10}]}],\"Stop\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_HELPER stop\",\"timeout\":10}]}],\"Notification\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_HELPER notification\",\"timeout\":10}]}],\"UserPromptSubmit\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_HELPER user-prompt-submit\",\"timeout\":10}]}]}}"
+HOOKS_JSON="{\"hooks\":{\"SessionStart\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_HELPER session-start\",\"timeout\":10}]}],\"Stop\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_HELPER stop\",\"timeout\":10}]}],\"PreToolUse\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_HELPER pre-tool-use\",\"timeout\":10}]}],\"Notification\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_HELPER notification\",\"timeout\":10}]}],\"UserPromptSubmit\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"$HOOK_HELPER user-prompt-submit\",\"timeout\":10}]}]}}"
 
 exec "$REAL_CLAUDE" --settings "$HOOKS_JSON" "$@"
