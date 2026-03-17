@@ -460,21 +460,19 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         selectedProjectIndex = index
 
         let project = projects[index]
-        if !project.tabs.isEmpty {
-            project.selectedTabIndex = max(0, min(project.selectedTabIndex, project.tabs.count - 1))
-        }
 
         rebuildTabBar()
 
         if project.tabs.isEmpty {
-            // Hide all terminal views so nothing bleeds through
             for sub in terminalContainerView.subviews where sub is TerminalNSView {
                 sub.isHidden = true
             }
             currentTerminalView = nil
             welcomeLabel?.isHidden = false
         } else {
-            showTab(project.tabs[project.selectedTabIndex])
+            // Always clamp for safe array access, even during restore
+            let safeIdx = max(0, min(project.selectedTabIndex, project.tabs.count - 1))
+            showTab(project.tabs[safeIdx])
         }
 
         // Show folder path in title bar
@@ -988,7 +986,8 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
             projects.append(project)
         }
 
-        isRestoring = false
+        // Keep isRestoring = true until Phase 2 finishes, so selectProject
+        // won't clamp selectedTabIndex before all tabs are inserted.
 
         rebuildSidebar()
         if selectedIdx >= 0 && selectedIdx < projects.count {
@@ -1003,6 +1002,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     private func createTabsProgressively(_ remaining: [(project: ProjectItem, tab: ProjectTabState, originalIndex: Int)]) {
         guard let first = remaining.first else {
             // All tabs created — rebuild UI to reflect the full state
+            isRestoring = false
             rebuildSidebar()
             rebuildTabBar()
             saveState()
