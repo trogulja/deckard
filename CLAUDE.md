@@ -18,27 +18,23 @@ open /Users/gilles/Library/Developer/Xcode/DerivedData/Deckard-hkgvzqxyznptcubaw
 
 ## Releasing a New Version
 
-### Version locations (update all 3)
+Releases are automated via [release-please](https://github.com/googleapis/release-please). Use **conventional commits** (`feat:`, `fix:`, `chore:`, etc.) on `master`.
+
+### How it works
+
+1. Commits land on `master` with conventional commit messages.
+2. release-please opens (or updates) a release PR that bumps the version and updates `CHANGELOG.md`.
+3. Merging that PR creates a `vX.Y.Z` tag, which triggers the build job to build, sign, and publish the DMG.
+
+### Version locations (managed by release-please)
+
+These files contain `x-release-please-version` annotations and are bumped automatically:
 
 1. `Resources/Info.plist` — `CFBundleShortVersionString`
 2. `Sources/Window/SettingsWindow.swift` — version label in About pane
 3. `README.md` — download badge version
 
-### Steps
-
-```bash
-# 1. Bump version in all 3 files above
-
-# 2. Commit and push
-git add Resources/Info.plist Sources/Window/SettingsWindow.swift README.md
-git commit -m "Bump version to X.Y.Z"
-git push
-
-# 3. Wait for CI to pass, then create GitHub release (also creates the git tag)
-gh release create vX.Y.Z --repo gi11es/deckard --title "vX.Y.Z" --latest --notes "release notes here"
-```
-
-Use `git log vPREVIOUS..HEAD --oneline` to summarize changes for release notes.
+Do not bump versions manually — merge the release-please PR instead.
 
 ## Commit Messages
 
