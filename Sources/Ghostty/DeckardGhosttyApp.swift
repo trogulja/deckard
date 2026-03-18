@@ -298,21 +298,29 @@ class DeckardGhosttyApp {
 
         ghostty_config_finalize(newConfig)
 
+        // Read colors on main thread (safe, just reads config values)
         updateDefaultBackground(from: newConfig)
         updateDefaultForeground(from: newConfig)
 
-        // Update app config first, then each surface individually
-        ghostty_app_update_config(app, newConfig)
+        // Collect surface pointers on main thread (must access UI state on main)
+        var surfaces: [ghostty_surface_t] = []
         if let wc = AppDelegate.shared?.windowController {
-            wc.forEachSurface { surface in
-                ghostty_surface_update_config(surface, newConfig)
-            }
+            wc.forEachSurface { surfaces.append($0) }
         }
 
-        // Free old config AFTER all updates are done
+        // Swap config reference immediately so new surfaces use the new config
         let oldConfig = self.config
         self.config = newConfig
-        if let oldConfig { ghostty_config_free(oldConfig) }
+
+        // Apply config updates on a background queue to avoid deadlocking
+        // with libghostty's renderer/IO thread locks (same pattern as issue #5).
+        DispatchQueue.global(qos: .userInitiated).async {
+            ghostty_app_update_config(app, newConfig)
+            for surface in surfaces {
+                ghostty_surface_update_config(surface, newConfig)
+            }
+            if let oldConfig { ghostty_config_free(oldConfig) }
+        }
     }
 
     // MARK: - Action Handling
