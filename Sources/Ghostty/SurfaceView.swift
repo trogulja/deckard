@@ -38,6 +38,12 @@ class TerminalNSView: NSView {
     var pwd: String?
     /// Last time a keyDown was logged (for throttling diagnostic output).
     private var lastKeyDownLogTime: TimeInterval = 0
+    /// Tracks total keyDown calls since last focus gain, for stuck detection.
+    private var keyDownCount: Int = 0
+    /// Last time a non-modifier keyAction returned true.
+    private var lastSuccessfulCharKeyTime: TimeInterval = 0
+    /// When becomeFirstResponder last succeeded.
+    private var focusGainedTime: TimeInterval = 0
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -241,8 +247,11 @@ class TerminalNSView: NSView {
         let result = super.becomeFirstResponder()
         if result {
             surface.map { ghostty_surface_set_focus($0, true) }
+            focusGainedTime = ProcessInfo.processInfo.systemUptime
+            keyDownCount = 0
         }
-        DiagnosticLog.shared.log("focus", "becomeFirstResponder: \(result) surfaceId=\(surfaceId)")
+        DiagnosticLog.shared.log("focus",
+            "becomeFirstResponder: \(result) surfaceId=\(surfaceId) surfaceAlive=\(surface != nil)")
         return result
     }
 
@@ -251,7 +260,9 @@ class TerminalNSView: NSView {
         if result {
             surface.map { ghostty_surface_set_focus($0, false) }
         }
-        DiagnosticLog.shared.log("focus", "resignFirstResponder: \(result) surfaceId=\(surfaceId)")
+        let fr = window?.firstResponder
+        DiagnosticLog.shared.log("focus",
+            "resignFirstResponder: \(result) surfaceId=\(surfaceId) surfaceAlive=\(surface != nil) windowFR=\(type(of: fr))")
         return result
     }
 
@@ -379,11 +390,20 @@ class TerminalNSView: NSView {
             return
         }
 
+        keyDownCount += 1
         let now = ProcessInfo.processInfo.systemUptime
         let gap = now - lastKeyDownLogTime
         if gap > 5 {
-            DiagnosticLog.shared.log("input", "keyDown: resumed after \(String(format: "%.1f", gap))s idle, keyCode=\(event.keyCode) surfaceId=\(surfaceId)")
+            DiagnosticLog.shared.log("input", "keyDown: resumed after \(String(format: "%.1f", gap))s idle, keyCode=\(event.keyCode) surfaceId=\(surfaceId) totalKeys=\(keyDownCount)")
             lastKeyDownLogTime = now
+        }
+
+        // Stuck detection: keyDown is being called but no character key has succeeded recently
+        if keyDownCount > 10 && lastSuccessfulCharKeyTime > 0 && (now - lastSuccessfulCharKeyTime) > 2.0 {
+            DiagnosticLog.shared.log("input",
+                "STUCK: keyDown called but no successful char keyAction in \(String(format: "%.1f", now - lastSuccessfulCharKeyTime))s. " +
+                "keyDownCount=\(keyDownCount) surface=\(surface != nil) " +
+                "windowFR=\(type(of: window?.firstResponder)) surfaceId=\(surfaceId)")
         }
 
         // Translate mods to handle configs like option-as-alt.
@@ -629,9 +649,19 @@ class TerminalNSView: NSView {
         }
 
         let elapsed = ProcessInfo.processInfo.systemUptime - start
-        if elapsed > 0.1 || !result {
+
+        // Track successful character key actions (non-modifier press/repeat)
+        let isModifierOnly = [55, 56, 57, 58, 59, 60, 61, 62, 63].contains(Int(event.keyCode))
+        if result && !isModifierOnly && (action == GHOSTTY_ACTION_PRESS || action == GHOSTTY_ACTION_REPEAT) {
+            lastSuccessfulCharKeyTime = start
+        }
+
+        // Verbose logging for first 5s after focus gain, or on failure/slowness
+        let sinceFocus = start - focusGainedTime
+        if elapsed > 0.1 || !result || (sinceFocus < 5 && !isModifierOnly) {
             DiagnosticLog.shared.log("input",
-                "keyAction: keyCode=\(event.keyCode) result=\(result) elapsed=\(String(format: "%.3f", elapsed))s surfaceId=\(surfaceId)")
+                "keyAction: keyCode=\(event.keyCode) result=\(result) elapsed=\(String(format: "%.3f", elapsed))s surfaceId=\(surfaceId)" +
+                (sinceFocus < 5 ? " [VERBOSE sinceFocus=\(String(format: "%.1f", sinceFocus))s]" : ""))
         }
         return result
     }
