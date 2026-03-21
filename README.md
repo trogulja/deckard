@@ -2,7 +2,7 @@
 
 A terminal built for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Deckard is a native macOS app that treats Claude Code sessions as first-class objects. Each tab knows whether Claude is thinking, waiting for input, or needs tool approval, and tracks context window usage so you know when a session is running low.
 
-Run multiple sessions side by side in a single window with tabs, projects, and session persistence. Built with Swift and AppKit. Terminal rendering powered by [Ghostty](https://ghostty.org/).
+Run multiple sessions side by side in a single window with tabs, projects, and session persistence. Built with Swift and AppKit. Terminal rendering powered by [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).
 
 [![Download for macOS](https://img.shields.io/static/v1?label=Download+for+macOS&message=v0.2.0&color=black&style=for-the-badge&logo=apple&logoColor=white)](https://github.com/gi11es/deckard/releases/latest) <!-- x-release-please-version -->
 
@@ -15,8 +15,7 @@ Run multiple sessions side by side in a single window with tabs, projects, and s
 - **Context usage tracking**: A progress bar shows how much of Claude's context window the active session has consumed.
 - **Session state detection**: Tab badges show whether Claude is thinking, waiting for input, needs tool permission, or has errored. Terminal tabs show CPU/disk activity.
 - **Session persistence**: Claude sessions are saved across restarts. Relaunch Deckard and pick up where you left off.
-- **Themes**: Hundreds of Ghostty themes, selectable from Settings. Deckard also reads your `~/.config/ghostty/config`.
-- **GPU-accelerated rendering**: Terminal surfaces are rendered through Metal via Ghostty's libghostty.
+- **Terminal rendering**: Powered by [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm), a self-contained terminal emulator with VT100/xterm emulation, IME support, and mouse reporting.
 
 ## Requirements
 
@@ -26,12 +25,11 @@ Run multiple sessions side by side in a single window with tabs, projects, and s
 
 ## Building
 
-Deckard uses [Ghostty](https://ghostty.org/) as a git submodule. Clone with submodules, run the setup script (builds GhosttyKit and installs git hooks), then build:
+Clone and build. SwiftTerm is fetched automatically via Swift Package Manager:
 
 ```bash
-git clone --recurse-submodules https://github.com/gi11es/deckard.git
+git clone https://github.com/gi11es/deckard.git
 cd deckard
-./scripts/setup.sh
 xcodebuild -project Deckard.xcodeproj -scheme Deckard -configuration Debug build
 ```
 
