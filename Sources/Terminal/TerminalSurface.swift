@@ -76,6 +76,8 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
 
     /// Terminate the shell process.
     func terminate() {
+        guard !processExited else { return }
+        processExited = true
         terminalView.process?.terminate()
     }
 

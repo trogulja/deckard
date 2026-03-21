@@ -559,7 +559,9 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         )
 
         surface.onProcessExit = { [weak self] exitedSurface in
-            self?.handleSurfaceClosedById(exitedSurface.surfaceId)
+            DispatchQueue.main.async {
+                self?.handleSurfaceClosedById(exitedSurface.surfaceId)
+            }
         }
 
         project.tabs.append(tab)
@@ -585,7 +587,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         showTab(project.tabs[project.selectedTabIndex])
         saveState()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             self?.isCreatingTab = false
         }
     }
