@@ -9,6 +9,8 @@ class DeckardGhosttyApp {
     private(set) var config: ghostty_config_t?
     private(set) var defaultBackgroundColor: NSColor = .windowBackgroundColor
     private(set) var defaultForegroundColor: NSColor = .labelColor
+    /// Limits diagnostic logging for RENDER action target resolution (first 3 only).
+    private var renderDiagCount = 0
 
     /// Path to a Deckard-specific ghostty config file (loaded last to override defaults).
     static let deckardConfigPath: String = {
@@ -335,18 +337,22 @@ class DeckardGhosttyApp {
         let oldConfig = self.config
         self.config = newConfig
 
-        // Apply config updates on a background queue to avoid deadlocking
-        // with libghostty's renderer/IO thread locks (same pattern as issue #5).
-        DispatchQueue.global(qos: .userInitiated).async {
-            ghostty_app_update_config(app, newConfig)
-            for surface in surfaces {
-                ghostty_surface_update_config(surface, newConfig)
-            }
-            if let oldConfig { ghostty_config_free(oldConfig) }
+        ghostty_app_update_config(app, newConfig)
+        for surface in surfaces {
+            ghostty_surface_update_config(surface, newConfig)
         }
+        if let oldConfig { ghostty_config_free(oldConfig) }
     }
 
     // MARK: - Action Handling
+
+    /// Resolve the TerminalNSView for a surface-targeted action.
+    private func surfaceView(from target: ghostty_target_s) -> TerminalNSView? {
+        guard target.tag == GHOSTTY_TARGET_SURFACE,
+              let surface = target.target.surface,
+              let ud = ghostty_surface_userdata(surface) else { return nil }
+        return Unmanaged<SurfaceCallbackContext>.fromOpaque(ud).takeUnretainedValue().view
+    }
 
     func handleAction(target: ghostty_target_s, action: ghostty_action_s) -> Bool {
         switch action.tag {
@@ -412,9 +418,30 @@ class DeckardGhosttyApp {
             }
             return true
 
-        case GHOSTTY_ACTION_RENDERER_HEALTH,
-             GHOSTTY_ACTION_CELL_SIZE,
-             GHOSTTY_ACTION_RENDER,
+        case GHOSTTY_ACTION_RENDER:
+            // Update render heartbeat — benign race (written here, read on main thread).
+            // RENDER can be app-targeted (all surfaces) or surface-targeted (one surface).
+            if let view = surfaceView(from: target) {
+                view.lastRenderActionTime = ProcessInfo.processInfo.systemUptime
+            } else if renderDiagCount < 3 {
+                renderDiagCount += 1
+                let tag = target.tag == GHOSTTY_TARGET_APP ? "APP" : "SURFACE(no view)"
+                DiagnosticLog.shared.log("render", "RENDER target=\(tag)")
+            }
+            return true
+
+        case GHOSTTY_ACTION_RENDERER_HEALTH:
+            if let view = surfaceView(from: target) {
+                let unhealthy = (action.action.renderer_health == GHOSTTY_RENDERER_HEALTH_UNHEALTHY)
+                DispatchQueue.main.async {
+                    view.rendererUnhealthy = unhealthy
+                    DiagnosticLog.shared.log("health",
+                        "RENDERER_HEALTH: \(unhealthy ? "UNHEALTHY" : "healthy") surfaceId=\(view.surfaceId)")
+                }
+            }
+            return true
+
+        case GHOSTTY_ACTION_CELL_SIZE,
              GHOSTTY_ACTION_COLOR_CHANGE,
              GHOSTTY_ACTION_CONFIG_CHANGE,
              GHOSTTY_ACTION_RELOAD_CONFIG,

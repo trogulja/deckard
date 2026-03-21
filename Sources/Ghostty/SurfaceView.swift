@@ -51,10 +51,6 @@ class TerminalNSView: NSView {
     private var lastRecoveryNudgeTime: TimeInterval = 0
     /// When becomeFirstResponder last succeeded.
     private var focusGainedTime: TimeInterval = 0
-    /// Serial queue for ghostty surface calls that acquire the renderer/IO lock.
-    /// Avoids deadlocking the main thread (same pattern as destroySurface/set_focus).
-    private let surfaceQueue = DispatchQueue(label: "com.deckard.surface-io", qos: .userInteractive)
-
     override var acceptsFirstResponder: Bool { true }
 
     init(surfaceId: UUID = UUID()) {
@@ -186,15 +182,10 @@ class TerminalNSView: NSView {
 
         // Free the ghostty surface on a background queue to avoid deadlocking
         // the main thread with the renderer's lock (see issue #5).
-        // Drain surfaceQueue first so pending key/text events don't use a
-        // freed surface, then free on the global queue.
         if let surface = surface {
-            let queue = surfaceQueue
-            queue.async {
-                DispatchQueue.global(qos: .utility).async {
-                    ghostty_surface_free(surface)
-                    ctx?.release()
-                }
+            DispatchQueue.global(qos: .utility).async {
+                ghostty_surface_free(surface)
+                ctx?.release()
             }
         } else {
             ctx?.release()
@@ -220,9 +211,7 @@ class TerminalNSView: NSView {
         CATransaction.setDisableActions(true)
         layer?.contentsScale = scale
         CATransaction.commit()
-        surfaceQueue.async {
-            ghostty_surface_set_content_scale(surface, scale, scale)
-        }
+        ghostty_surface_set_content_scale(surface, scale, scale)
         updateSurfaceSize()
     }
 
@@ -243,9 +232,7 @@ class TerminalNSView: NSView {
         layer?.contentsScale = scale
         CATransaction.commit()
 
-        surfaceQueue.async {
-            ghostty_surface_set_content_scale(surface, scale, scale)
-        }
+        ghostty_surface_set_content_scale(surface, scale, scale)
         updateSurfaceSize()
     }
 
@@ -253,9 +240,7 @@ class TerminalNSView: NSView {
         guard let surface = self.surface else { return }
         let scaledSize = convertToBacking(bounds.size)
         guard scaledSize.width > 0 && scaledSize.height > 0 else { return }
-        surfaceQueue.async {
-            ghostty_surface_set_size(surface, UInt32(scaledSize.width), UInt32(scaledSize.height))
-        }
+        ghostty_surface_set_size(surface, UInt32(scaledSize.width), UInt32(scaledSize.height))
     }
 
     // MARK: - Focus
@@ -263,13 +248,7 @@ class TerminalNSView: NSView {
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
         if result {
-            // Dispatch to background queue to avoid deadlocking the main thread
-            // with libghostty's renderer/IO lock (same pattern as destroySurface).
-            if let s = surface {
-                DispatchQueue.global(qos: .userInteractive).async {
-                    ghostty_surface_set_focus(s, true)
-                }
-            }
+            surface.map { ghostty_surface_set_focus($0, true) }
             focusGainedTime = ProcessInfo.processInfo.systemUptime
             keyDownCount = 0
         }
@@ -281,13 +260,7 @@ class TerminalNSView: NSView {
     override func resignFirstResponder() -> Bool {
         let result = super.resignFirstResponder()
         if result {
-            // Dispatch to background queue to avoid deadlocking the main thread
-            // with libghostty's renderer/IO lock (same pattern as destroySurface).
-            if let s = surface {
-                DispatchQueue.global(qos: .userInteractive).async {
-                    ghostty_surface_set_focus(s, false)
-                }
-            }
+            surface.map { ghostty_surface_set_focus($0, false) }
         }
         let fr = window?.firstResponder
         DiagnosticLog.shared.log("focus",
@@ -459,9 +432,7 @@ class TerminalNSView: NSView {
                 updateSurfaceSize()
                 if let window = self.window {
                     let scale = window.backingScaleFactor
-                    surfaceQueue.async {
-                        ghostty_surface_set_content_scale(surface, scale, scale)
-                    }
+                    ghostty_surface_set_content_scale(surface, scale, scale)
                 }
             }
         }
@@ -774,20 +745,15 @@ class TerminalNSView: NSView {
     private func syncPreedit(clearIfNeeded: Bool = true) {
         guard let surface = self.surface else { return }
         if markedText.length > 0 {
-            // Capture the string by value for async dispatch.
             let str = markedText.string
-            surfaceQueue.async {
-                let len = str.utf8CString.count
-                if len > 0 {
-                    str.withCString { ptr in
-                        ghostty_surface_preedit(surface, ptr, UInt(len - 1))
-                    }
+            let len = str.utf8CString.count
+            if len > 0 {
+                str.withCString { ptr in
+                    ghostty_surface_preedit(surface, ptr, UInt(len - 1))
                 }
             }
         } else if clearIfNeeded {
-            surfaceQueue.async {
-                ghostty_surface_preedit(surface, nil, 0)
-            }
+            ghostty_surface_preedit(surface, nil, 0)
         }
     }
 
@@ -803,19 +769,15 @@ class TerminalNSView: NSView {
 
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL], !urls.isEmpty {
             let text = urls.map { $0.isFileURL ? shellEscape($0.path) : $0.absoluteString }.joined(separator: " ")
-            surfaceQueue.async {
-                text.withCString { ptr in
-                    ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
-                }
+            text.withCString { ptr in
+                ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
             }
             return true
         }
 
         if let text = pasteboard.string(forType: .string) {
-            surfaceQueue.async {
-                text.withCString { ptr in
-                    ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
-                }
+            text.withCString { ptr in
+                ghostty_surface_text(surface, ptr, UInt(text.utf8.count))
             }
             return true
         }
