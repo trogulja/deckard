@@ -1,6 +1,6 @@
 import AppKit
 
-/// Holds colors extracted from the Ghostty config and derives chrome colors for the UI.
+/// Holds terminal theme colors and derives chrome colors for the UI.
 struct ThemeColors {
     let background: NSColor
     let foreground: NSColor

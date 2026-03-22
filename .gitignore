@@ -5,10 +5,6 @@ DerivedData/
 *.xcworkspace
 !Deckard.xcodeproj
 
-# Zig build artifacts (in ghostty submodule)
-ghostty/.zig-cache/
-ghostty/zig-out/
-
 # macOS
 .DS_Store
 *.swp

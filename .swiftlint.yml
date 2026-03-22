@@ -1,9 +1,6 @@
 included:
   - Sources
 
-excluded:
-  - ghostty
-
 disabled_rules:
   - trailing_whitespace
   - line_length
