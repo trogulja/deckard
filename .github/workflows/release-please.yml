@@ -3,6 +3,11 @@ name: Release Please
 on:
   push:
     branches: [master]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag to build and release (e.g. v0.3.0)'
+        required: true
 
 permissions:
   contents: write
@@ -10,6 +15,7 @@ permissions:
 
 jobs:
   release-please:
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
@@ -22,13 +28,19 @@ jobs:
 
   build:
     name: Build & Release
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    if: >-
+      ${{ always() && (
+        (github.event_name == 'workflow_dispatch') ||
+        (needs.release-please.outputs.release_created == 'true')
+      ) }}
+    needs: [release-please]
     runs-on: macos-15
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || needs.release-please.outputs.tag_name }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ env.TAG }}
 
       - name: Select Xcode 26
         run: sudo xcode-select -s /Applications/Xcode_26.2.app
@@ -38,9 +50,7 @@ jobs:
 
       - name: Extract version
         id: version
-        run: echo "version=${TAG_NAME#v}" >> "$GITHUB_OUTPUT"
-        env:
-          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build Deckard
         run: |
@@ -105,4 +115,4 @@ jobs:
       - name: Upload DMG to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" Deckard-*.dmg --clobber
+        run: gh release upload "${{ env.TAG }}" Deckard-*.dmg --clobber
