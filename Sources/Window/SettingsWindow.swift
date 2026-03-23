@@ -122,7 +122,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
 
         let grid = NSGridView(numberOfColumns: 2, rows: 0)
         grid.translatesAutoresizingMaskIntoConstraints = false
-        grid.column(at: 0).xPlacement = .trailing
+        grid.column(at: 0).xPlacement = .leading
         grid.column(at: 1).xPlacement = .fill
         grid.rowSpacing = 6
         grid.columnSpacing = 8
@@ -786,6 +786,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         let pane = NSView()
 
         // 4-column grid: label1 | recorder1 | label2 | recorder2
+        // Use explicit column widths to prevent random layout shifts.
         let grid = NSGridView(numberOfColumns: 4, rows: 0)
         grid.translatesAutoresizingMaskIntoConstraints = false
         grid.column(at: 0).xPlacement = .trailing
@@ -794,6 +795,12 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         grid.column(at: 3).xPlacement = .leading
         grid.rowSpacing = 8
         grid.columnSpacing = 12
+
+        // Pin column widths so they never shift
+        grid.column(at: 0).width = 140
+        grid.column(at: 1).width = 100
+        grid.column(at: 2).width = 60
+        grid.column(at: 3).width = 100
 
         // Lay out entries in two columns
         let entries = configurableShortcuts
@@ -824,8 +831,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         pane.addSubview(grid)
         NSLayoutConstraint.activate([
             grid.topAnchor.constraint(equalTo: pane.topAnchor, constant: 20),
-            grid.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 24),
-            grid.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -24),
+            grid.centerXAnchor.constraint(equalTo: pane.centerXAnchor),
             grid.bottomAnchor.constraint(equalTo: pane.bottomAnchor, constant: -20),
         ])
 
