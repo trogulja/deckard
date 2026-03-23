@@ -177,15 +177,21 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
 
     // MARK: - Appearance Pane
 
-    private var themeTableView: NSTableView?
+    private var themeCollectionScrollView: NSScrollView?
+    private var themeCardContainer: FlippedCardContainer?
+    private var themeCards: [ThemeCardView] = []
+    private var filteredThemeCards: [ThemeCardView] = []
     private var themeSearchField: NSSearchField?
-    private var allThemeEntries: [(name: String, info: ThemeManager.ThemeInfo?)] = []
-    private var suppressThemeSelection = false
+
+    /// A flipped NSView so card layout starts from the top.
+    private class FlippedCardContainer: NSView {
+        override var isFlipped: Bool { true }
+    }
 
     private func makeAppearancePane() -> NSView {
         let pane = NSView()
 
-        // Theme picker
+        // Theme picker header
         let label = NSTextField(labelWithString: "Theme:")
         label.font = .systemFont(ofSize: 13, weight: .medium)
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -197,25 +203,42 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         searchField.action = #selector(themeSearchChanged(_:))
         self.themeSearchField = searchField
 
-        let tableView = NSTableView()
-        tableView.headerView = nil
-        tableView.rowHeight = 24
-        tableView.style = .plain
-        tableView.usesAlternatingRowBackgroundColors = false
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("theme"))
-        column.title = "Theme"
-        tableView.addTableColumn(column)
-        tableView.delegate = self
-        tableView.dataSource = self
-        tableView.target = self
-        tableView.action = #selector(themeRowClicked)
-        self.themeTableView = tableView
+        // Build theme cards
+        themeCards = []
+        let systemCard = ThemeCardView(name: "System Default", path: nil)
+        systemCard.onSelect = { [weak self] card in self?.themeCardSelected(card) }
+        themeCards.append(systemCard)
+
+        for theme in ThemeManager.shared.availableThemes {
+            let card = ThemeCardView(name: theme.name, path: theme.path)
+            card.onSelect = { [weak self] card in self?.themeCardSelected(card) }
+            themeCards.append(card)
+        }
+        filteredThemeCards = themeCards
+
+        // Mark the current theme as selected
+        let currentName = ThemeManager.shared.currentThemeName
+        for card in themeCards {
+            card.isSelectedTheme = (currentName == nil && card.themePath == nil)
+                || (currentName != nil && card.themeName == currentName)
+        }
+
+        // Card container inside a scroll view
+        let container = FlippedCardContainer()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        self.themeCardContainer = container
+
+        for card in themeCards {
+            container.addSubview(card)
+        }
 
         let scrollView = NSScrollView()
-        scrollView.documentView = tableView
+        scrollView.documentView = container
         scrollView.hasVerticalScroller = true
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.borderType = .bezelBorder
+        scrollView.drawsBackground = false
+        self.themeCollectionScrollView = scrollView
 
         pane.addSubview(label)
         pane.addSubview(searchField)
@@ -249,7 +272,11 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 10),
             scrollView.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 20),
             scrollView.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -20),
-            scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 200),
+            scrollView.heightAnchor.constraint(equalToConstant: 260),
+
+            // Container width matches the scroll view's clip view
+            container.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
 
             divider.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: 20),
             divider.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 20),
@@ -263,51 +290,70 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             badgeGrid.bottomAnchor.constraint(equalTo: pane.bottomAnchor, constant: -16),
         ])
 
-        // Populate theme list
-        rebuildThemeList(filter: "")
-
-        // Select current theme
-        suppressThemeSelection = true
-        if let current = ThemeManager.shared.currentThemeName {
-            if let idx = allThemeEntries.firstIndex(where: { $0.name == current }) {
-                tableView.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
-                tableView.scrollRowToVisible(idx)
-            }
-        } else {
-            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        // Perform initial layout after the view is sized
+        DispatchQueue.main.async { [weak self] in
+            self?.layoutThemeCards()
         }
-        suppressThemeSelection = false
 
         return pane
     }
 
-    private func rebuildThemeList(filter: String) {
-        var entries: [(name: String, info: ThemeManager.ThemeInfo?)] = []
-        entries.append((name: "System Default", info: nil))
+    private func layoutThemeCards() {
+        guard let container = themeCardContainer else { return }
+        let padding: CGFloat = 8
+        let spacing: CGFloat = 8
+        let availableWidth = container.superview?.bounds.width ?? 600
+        let cardWidth = floor((availableWidth - padding * 2 - spacing * 2) / 3)
+        let cardHeight: CGFloat = 110
 
-        for theme in ThemeManager.shared.availableThemes {
-            if filter.isEmpty || theme.name.localizedCaseInsensitiveContains(filter) {
-                entries.append((name: theme.name, info: theme))
+        var x = padding, y = padding
+        var col = 0
+        for card in filteredThemeCards {
+            card.frame = NSRect(x: x, y: y, width: cardWidth, height: cardHeight)
+            card.isHidden = false
+            card.needsDisplay = true
+            col += 1
+            if col >= 3 {
+                col = 0
+                x = padding
+                y += cardHeight + spacing
+            } else {
+                x += cardWidth + spacing
             }
         }
-        allThemeEntries = entries
-        themeTableView?.reloadData()
+        // Hide non-matching cards
+        for card in themeCards where !filteredThemeCards.contains(where: { $0 === card }) {
+            card.isHidden = true
+        }
+        // Size container to fit
+        let rows = ceil(Double(filteredThemeCards.count) / 3.0)
+        let totalHeight = max(CGFloat(rows) * (cardHeight + spacing) + padding, 200)
+        container.frame = NSRect(x: 0, y: 0, width: availableWidth, height: totalHeight)
     }
 
     @objc private func themeSearchChanged(_ sender: NSSearchField) {
-        rebuildThemeList(filter: sender.stringValue)
+        let filter = sender.stringValue
+        if filter.isEmpty {
+            filteredThemeCards = themeCards
+        } else {
+            filteredThemeCards = themeCards.filter {
+                $0.themeName.localizedCaseInsensitiveContains(filter)
+            }
+        }
+        layoutThemeCards()
     }
 
-    private func applySelectedTheme() {
-        guard !suppressThemeSelection else { return }
-        guard let tableView = themeTableView else { return }
-        let row = tableView.selectedRow
-        guard row >= 0, row < allThemeEntries.count else { return }
-        ThemeManager.shared.applyTheme(name: allThemeEntries[row].info?.name)
-    }
-
-    @objc private func themeRowClicked() {
-        applySelectedTheme()
+    private func themeCardSelected(_ card: ThemeCardView) {
+        // Update selection state on all cards
+        for c in themeCards {
+            c.isSelectedTheme = (c === card)
+        }
+        // Apply the theme
+        if card.themePath == nil {
+            ThemeManager.shared.applyTheme(name: nil)
+        } else {
+            ThemeManager.shared.applyTheme(name: card.themeName)
+        }
     }
 
     // MARK: - Badge Color Grid
@@ -657,32 +703,5 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     }
 }
 
-
-// MARK: - Theme Table DataSource/Delegate
-
-extension SettingsWindowController: NSTableViewDataSource, NSTableViewDelegate {
-    func numberOfRows(in tableView: NSTableView) -> Int {
-        allThemeEntries.count
-    }
-
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let id = NSUserInterfaceItemIdentifier("ThemeCell")
-        let cell = tableView.makeView(withIdentifier: id, owner: nil) as? NSTextField
-            ?? {
-                let tf = NSTextField(labelWithString: "")
-                tf.identifier = id
-                tf.lineBreakMode = .byTruncatingTail
-                return tf
-            }()
-        let entry = allThemeEntries[row]
-        cell.stringValue = entry.name
-        cell.font = entry.info == nil ? .systemFont(ofSize: 13, weight: .medium) : .systemFont(ofSize: 13)
-        return cell
-    }
-
-    func tableViewSelectionDidChange(_ notification: Notification) {
-        applySelectedTheme()
-    }
-}
 
 private var settingsKeyAssoc: UInt8 = 0
