@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/gi11es/deckard/compare/v0.5.0...v0.6.0) (2026-03-23)
+
+
+### Features
+
+* configurable scrollback buffer (default 10,000 lines) ([a23de73](https://github.com/gi11es/deckard/commit/a23de73b08762b0c29a2bb17b4559690f699b9d9))
+
+
+### Bug Fixes
+
+* left-align General pane, fix Shortcuts column widths ([65b06f3](https://github.com/gi11es/deckard/commit/65b06f32bb0439181e8039b8d799faaf08f5ad21))
+* read version from bundle instead of hardcoded string ([4ff5a1f](https://github.com/gi11es/deckard/commit/4ff5a1f7d2409d2d34276fb5c4903404adb9149b))
+* use fixed pane heights in Settings to prevent window explosion ([e36ca77](https://github.com/gi11es/deckard/commit/e36ca77cb48eedb9cfbff92f6f5ec7b84e4c63a5))
+
 ## [0.5.0](https://github.com/gi11es/deckard/compare/v0.4.0...v0.5.0) (2026-03-23)
 
 
