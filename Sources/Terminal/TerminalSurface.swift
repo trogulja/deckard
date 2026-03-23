@@ -26,6 +26,11 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
         terminalView.processDelegate = self
         // Apply current theme colors
         ThemeManager.shared.currentScheme.apply(to: terminalView)
+        // Apply saved font
+        applySavedFont()
+        // Observe font changes from settings
+        NotificationCenter.default.addObserver(self, selector: #selector(fontDidChange(_:)),
+                                               name: .deckardFontChanged, object: nil)
     }
 
     /// Apply a color scheme to this terminal.
@@ -88,6 +93,23 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
         terminalView.process?.terminate()
     }
 
+    // MARK: - Font
+
+    private func applySavedFont() {
+        let name = UserDefaults.standard.string(forKey: "terminalFontName") ?? "SF Mono"
+        let size = UserDefaults.standard.double(forKey: "terminalFontSize")
+        let fontSize = size > 0 ? CGFloat(size) : 13.0
+        if let font = NSFont(name: name, size: fontSize) {
+            terminalView.font = font
+        }
+    }
+
+    @objc private func fontDidChange(_ notification: Notification) {
+        if let font = notification.userInfo?["font"] as? NSFont {
+            terminalView.font = font
+        }
+    }
+
     // MARK: - LocalProcessTerminalViewDelegate
 
     func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {
@@ -122,4 +144,5 @@ extension Notification.Name {
     static let deckardSurfaceClosed = Notification.Name("deckardSurfaceClosed")
     static let deckardNewTab = Notification.Name("deckardNewTab")
     static let deckardCloseTab = Notification.Name("deckardCloseTab")
+    static let deckardFontChanged = Notification.Name("deckardFontChanged")
 }

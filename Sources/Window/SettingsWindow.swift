@@ -26,7 +26,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 160),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 160),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -182,6 +182,10 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     private var themeCards: [ThemeCardView] = []
     private var filteredThemeCards: [ThemeCardView] = []
     private var themeSearchField: NSSearchField?
+    private var fontNamePopup: NSPopUpButton?
+    private var fontSizeField: NSTextField?
+    private var fontSizeStepper: NSStepper?
+    private var fontPreviewLabel: NSTextField?
 
     /// A flipped NSView so card layout starts from the top.
     private class FlippedCardContainer: NSView {
@@ -244,13 +248,93 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         pane.addSubview(searchField)
         pane.addSubview(scrollView)
 
-        // Divider
+        // --- Font picker section ---
+        let fontDivider = NSBox()
+        fontDivider.boxType = .separator
+        fontDivider.translatesAutoresizingMaskIntoConstraints = false
+        pane.addSubview(fontDivider)
+
+        let fontLabel = NSTextField(labelWithString: "Font:")
+        fontLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        fontLabel.translatesAutoresizingMaskIntoConstraints = false
+        pane.addSubview(fontLabel)
+
+        let savedFontName = UserDefaults.standard.string(forKey: "terminalFontName") ?? "SF Mono"
+        let savedFontSize = UserDefaults.standard.double(forKey: "terminalFontSize")
+        let currentFontSize = savedFontSize > 0 ? savedFontSize : 13.0
+
+        let fontNamePopup = NSPopUpButton(frame: .zero, pullsDown: false)
+        fontNamePopup.translatesAutoresizingMaskIntoConstraints = false
+        let monoFonts = NSFontManager.shared.availableFontFamilies.filter { family in
+            guard let font = NSFont(name: family, size: 12) else { return false }
+            return font.isFixedPitch || family.localizedCaseInsensitiveContains("mono")
+                || family.localizedCaseInsensitiveContains("courier")
+                || family.localizedCaseInsensitiveContains("menlo")
+                || family.localizedCaseInsensitiveContains("consolas")
+        }
+        for family in monoFonts.sorted() {
+            fontNamePopup.addItem(withTitle: family)
+        }
+        if let idx = fontNamePopup.itemTitles.firstIndex(of: savedFontName) {
+            fontNamePopup.selectItem(at: idx)
+        }
+        fontNamePopup.target = self
+        fontNamePopup.action = #selector(fontSettingChanged(_:))
+        self.fontNamePopup = fontNamePopup
+        pane.addSubview(fontNamePopup)
+
+        let sizeLabel = NSTextField(labelWithString: "Size:")
+        sizeLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        sizeLabel.translatesAutoresizingMaskIntoConstraints = false
+        pane.addSubview(sizeLabel)
+
+        let sizeField = NSTextField(string: String(format: "%.0f", currentFontSize))
+        sizeField.translatesAutoresizingMaskIntoConstraints = false
+        sizeField.alignment = .center
+        let formatter = NumberFormatter()
+        formatter.minimum = 8
+        formatter.maximum = 36
+        formatter.allowsFloats = false
+        sizeField.formatter = formatter
+        sizeField.target = self
+        sizeField.action = #selector(fontSettingChanged(_:))
+        self.fontSizeField = sizeField
+        pane.addSubview(sizeField)
+
+        let sizeStepper = NSStepper()
+        sizeStepper.translatesAutoresizingMaskIntoConstraints = false
+        sizeStepper.minValue = 8
+        sizeStepper.maxValue = 36
+        sizeStepper.increment = 1
+        sizeStepper.doubleValue = currentFontSize
+        sizeStepper.target = self
+        sizeStepper.action = #selector(fontSizeStepperChanged(_:))
+        self.fontSizeStepper = sizeStepper
+        pane.addSubview(sizeStepper)
+
+        // Font preview
+        let previewBox = NSBox()
+        previewBox.title = ""
+        previewBox.boxType = .custom
+        previewBox.borderType = .bezelBorder
+        previewBox.translatesAutoresizingMaskIntoConstraints = false
+        pane.addSubview(previewBox)
+
+        let previewText = NSTextField(labelWithString: "ABCDEFGHIJKLM 0123456789\nThe quick brown fox jumps over the lazy dog\n~$ claude --help")
+        previewText.maximumNumberOfLines = 3
+        previewText.font = NSFont(name: savedFontName, size: CGFloat(currentFontSize))
+            ?? NSFont.monospacedSystemFont(ofSize: CGFloat(currentFontSize), weight: .regular)
+        previewText.textColor = .labelColor
+        previewText.translatesAutoresizingMaskIntoConstraints = false
+        previewBox.addSubview(previewText)
+        self.fontPreviewLabel = previewText
+
+        // --- Badge section ---
         let divider = NSBox()
         divider.boxType = .separator
         divider.translatesAutoresizingMaskIntoConstraints = false
         pane.addSubview(divider)
 
-        // Status indicators section
         let badgeLabel = NSTextField(labelWithString: "Status Indicators:")
         badgeLabel.font = .systemFont(ofSize: 13, weight: .medium)
         badgeLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -261,6 +345,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         pane.addSubview(badgeGrid)
 
         NSLayoutConstraint.activate([
+            // Theme section
             label.topAnchor.constraint(equalTo: pane.topAnchor, constant: 16),
             label.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 20),
 
@@ -274,11 +359,42 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             scrollView.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -20),
             scrollView.heightAnchor.constraint(equalToConstant: 260),
 
-            // Container width matches the scroll view's clip view
             container.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
 
-            divider.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: 20),
+            // Font section
+            fontDivider.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: 16),
+            fontDivider.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 20),
+            fontDivider.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -20),
+
+            fontLabel.topAnchor.constraint(equalTo: fontDivider.bottomAnchor, constant: 12),
+            fontLabel.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 20),
+
+            fontNamePopup.centerYAnchor.constraint(equalTo: fontLabel.centerYAnchor),
+            fontNamePopup.leadingAnchor.constraint(equalTo: fontLabel.trailingAnchor, constant: 8),
+            fontNamePopup.widthAnchor.constraint(equalToConstant: 200),
+
+            sizeLabel.centerYAnchor.constraint(equalTo: fontLabel.centerYAnchor),
+            sizeLabel.leadingAnchor.constraint(equalTo: fontNamePopup.trailingAnchor, constant: 16),
+
+            sizeField.centerYAnchor.constraint(equalTo: fontLabel.centerYAnchor),
+            sizeField.leadingAnchor.constraint(equalTo: sizeLabel.trailingAnchor, constant: 4),
+            sizeField.widthAnchor.constraint(equalToConstant: 40),
+
+            sizeStepper.centerYAnchor.constraint(equalTo: fontLabel.centerYAnchor),
+            sizeStepper.leadingAnchor.constraint(equalTo: sizeField.trailingAnchor, constant: 2),
+
+            previewBox.topAnchor.constraint(equalTo: fontLabel.bottomAnchor, constant: 8),
+            previewBox.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 20),
+            previewBox.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -20),
+            previewBox.heightAnchor.constraint(equalToConstant: 60),
+
+            previewText.topAnchor.constraint(equalTo: previewBox.topAnchor, constant: 6),
+            previewText.leadingAnchor.constraint(equalTo: previewBox.leadingAnchor, constant: 8),
+            previewText.trailingAnchor.constraint(equalTo: previewBox.trailingAnchor, constant: -8),
+
+            // Badge section
+            divider.topAnchor.constraint(equalTo: previewBox.bottomAnchor, constant: 16),
             divider.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 20),
             divider.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -20),
 
@@ -354,6 +470,37 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         } else {
             ThemeManager.shared.applyTheme(name: card.themeName)
         }
+    }
+
+    // MARK: - Font Settings
+
+    @objc private func fontSettingChanged(_ sender: Any) {
+        applyFontSettings()
+    }
+
+    @objc private func fontSizeStepperChanged(_ sender: NSStepper) {
+        fontSizeField?.stringValue = String(format: "%.0f", sender.doubleValue)
+        applyFontSettings()
+    }
+
+    private func applyFontSettings() {
+        guard let fontName = fontNamePopup?.titleOfSelectedItem,
+              let sizeStr = fontSizeField?.stringValue,
+              let size = Double(sizeStr), size >= 8, size <= 36 else { return }
+
+        fontSizeStepper?.doubleValue = size
+
+        UserDefaults.standard.set(fontName, forKey: "terminalFontName")
+        UserDefaults.standard.set(size, forKey: "terminalFontSize")
+
+        // Update preview
+        let font = NSFont(name: fontName, size: CGFloat(size))
+            ?? NSFont.monospacedSystemFont(ofSize: CGFloat(size), weight: .regular)
+        fontPreviewLabel?.font = font
+
+        // Notify terminals to update font
+        NotificationCenter.default.post(name: .deckardFontChanged, object: nil,
+                                        userInfo: ["font": font])
     }
 
     // MARK: - Badge Color Grid
