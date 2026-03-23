@@ -868,7 +868,8 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         nameLabel.font = .boldSystemFont(ofSize: 14)
         stack.addArrangedSubview(nameLabel)
 
-        let versionLabel = NSTextField(labelWithString: "Version 0.5.0") // x-release-please-version
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let versionLabel = NSTextField(labelWithString: "Version \(version)")
         versionLabel.font = .systemFont(ofSize: 12)
         versionLabel.textColor = .secondaryLabelColor
         stack.addArrangedSubview(versionLabel)
