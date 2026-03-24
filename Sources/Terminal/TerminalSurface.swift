@@ -177,29 +177,11 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
                 currentDirectory: workingDirectory
             )
 
-            // Minimal tmux configuration:
-            // - Hide status bar (Deckard has its own tab UI)
-            // - Enable mouse (click panes, scroll, select text)
-            // - UTF-8 terminal for emoji/wide chars
-            // - Passthrough for escape sequences
-            // Everything else (selection, clipboard, scrolling) uses tmux defaults.
+            // Apply tmux options from settings (user-editable, with sensible defaults).
             let tmux = tmuxPath
             let session = sessionName
             DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.3) {
-                for args: [String] in [
-                    ["set-option", "-t", session, "status", "off"],
-                    ["set-option", "-t", session, "-g", "mouse", "on"],
-                    ["set-option", "-t", session, "-g", "default-terminal", "xterm-256color"],
-                    ["set-option", "-t", session, "-g", "allow-passthrough", "on"],
-                ] {
-                    let task = Process()
-                    task.executableURL = URL(fileURLWithPath: tmux)
-                    task.arguments = args
-                    task.standardOutput = FileHandle.nullDevice
-                    task.standardError = FileHandle.nullDevice
-                    try? task.run()
-                    task.waitUntilExit()
-                }
+                Self.applyTmuxOptions(tmuxPath: tmux, session: session)
             }
         } else {
             self.tmuxSessionName = nil
@@ -274,6 +256,43 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
         task.standardOutput = FileHandle.nullDevice
         task.standardError = FileHandle.nullDevice
         try? task.run()
+    }
+
+    // MARK: - tmux Options
+
+    /// Default tmux options applied to every Deckard session.
+    /// Each line is a tmux command (set-option, bind-key, etc.).
+    /// Users can edit these in Settings > Terminal.
+    static let defaultTmuxOptions = """
+    set -g status off
+    set -g mouse on
+    set -g default-terminal xterm-256color
+    set -g allow-passthrough on
+    """
+
+    /// Apply tmux options (from UserDefaults or defaults) to a session.
+    static func applyTmuxOptions(tmuxPath: String, session: String) {
+        let optionsText = UserDefaults.standard.string(forKey: "tmuxOptions")
+            ?? defaultTmuxOptions
+        for line in optionsText.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
+            // Parse the line into tmux arguments, scoped to this session
+            var args = trimmed.split(separator: " ").map(String.init)
+            // Insert -t session after the command name (set, set-option, bind-key, etc.)
+            // but only for set/set-option — bind-key is global
+            if args.count >= 2, ["set", "set-option"].contains(args[0]) {
+                args.insert("-t", at: 1)
+                args.insert(session, at: 2)
+            }
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: tmuxPath)
+            task.arguments = args
+            task.standardOutput = FileHandle.nullDevice
+            task.standardError = FileHandle.nullDevice
+            try? task.run()
+            task.waitUntilExit()
+        }
     }
 
     /// Get the shell PID running inside a tmux session.
