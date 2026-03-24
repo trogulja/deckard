@@ -126,6 +126,10 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
         // Build environment
         var env = ProcessInfo.processInfo.environment
         env["TERM"] = "xterm-256color"
+        // Ensure UTF-8 locale for proper emoji/wide character handling in tmux
+        if env["LANG"] == nil && env["LC_ALL"] == nil {
+            env["LANG"] = "en_US.UTF-8"
+        }
         env["DECKARD_SURFACE_ID"] = surfaceId.uuidString
         if let tabId { env["DECKARD_TAB_ID"] = tabId.uuidString }
         env["DECKARD_SOCKET_PATH"] = ControlSocket.shared.path
@@ -147,7 +151,8 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
 
             // tmux new-session -A: attach if exists, create if not
             // -s: session name, -c: starting directory (only for new sessions)
-            var args = ["new-session", "-A", "-s", sessionName]
+            // -u: force UTF-8 mode for proper emoji/wide character handling
+            var args = ["-u", "new-session", "-A", "-s", sessionName]
             if let cwd = workingDirectory { args += ["-c", cwd] }
 
             terminalView.startProcess(
