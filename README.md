@@ -38,7 +38,12 @@ The built app will be in your Xcode DerivedData directory.
 
 ## How It Works
 
-Deckard wraps the `claude` CLI with a thin hook layer. When Claude Code launches inside a Deckard tab, the wrapper injects lifecycle hooks via a Unix domain socket so the app can track session state, detect context usage, and surface notifications, without modifying Claude Code itself.
+On launch, Deckard automatically installs two integrations into Claude Code (no manual setup needed):
+
+1. **Lifecycle hooks** — a shell script and entries in `~/.claude/settings.json` that notify Deckard when Claude starts thinking, finishes a response, needs tool approval, or encounters an error. Communication happens over a Unix domain socket.
+2. **`/deckard` skill** — a Claude Code slash command (`~/.claude/commands/deckard.md`) for filing bug reports and feature requests directly from a session.
+
+These are installed idempotently on every launch and don't modify Claude Code itself.
 
 ## License
 
