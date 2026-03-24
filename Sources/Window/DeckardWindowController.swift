@@ -567,9 +567,17 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         if let name = name {
             tabName = name
         } else {
-            let count = project.tabs.filter { $0.isClaude == isClaude }.count + 1
             let base = isClaude ? "Claude" : "Terminal"
-            tabName = "\(base) #\(count)"
+            // Find the highest existing number for this tab type to avoid duplicates
+            let prefix = "\(base) #"
+            let maxNum = project.tabs
+                .filter { $0.isClaude == isClaude }
+                .compactMap { tab -> Int? in
+                    guard tab.name.hasPrefix(prefix) else { return nil }
+                    return Int(tab.name.dropFirst(prefix.count))
+                }
+                .max() ?? 0
+            tabName = "\(base) #\(maxNum + 1)"
         }
         let tab = TabItem(surface: surface, name: tabName, isClaude: isClaude)
         surface.tabId = tab.id
