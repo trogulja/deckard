@@ -144,8 +144,6 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     /// Saved first responder before a rebuild, used to detect and restore focus theft.
     weak var savedFirstResponder: NSResponder?
     private let terminalContainerView = NSView()
-    private let contextProgressBar = NSView()
-    private var contextProgressFill = NSView()
     private var contextTimer: Timer?
     private var processMonitorTimer: Timer?
     var currentTerminalView: NSView?
@@ -153,7 +151,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     private var emptyStateView: NSView?
 
     let sidebarDropZone = SidebarDropZone()
-    private let openFolderButton = NSButton()
+    private let quotaView = QuotaView()
     private let sidebarWidth: CGFloat = 210
     private var sidebarInitialized = false
     private var sidebarWidthBeforeCollapse: CGFloat = 210
@@ -193,6 +191,9 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         setupUI()
 
         NotificationCenter.default.addObserver(self, selector: #selector(themeDidChange(_:)), name: .deckardThemeChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(quotaDidChange), name: QuotaMonitor.quotaDidChange, object: nil)
+        // Show cached quota data immediately if available
+        quotaDidChange()
 
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
@@ -272,27 +273,20 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         sidebarStackView.translatesAutoresizingMaskIntoConstraints = false
         sidebarView.addSubview(sidebarStackView)
 
-        // Open folder button at bottom of sidebar
-        openFolderButton.image = NSImage(systemSymbolName: "folder.badge.plus", accessibilityDescription: "Open Folder")
-        openFolderButton.target = self
-        openFolderButton.action = #selector(openProjectClicked)
-        openFolderButton.bezelStyle = .recessed
-        openFolderButton.isBordered = false
-        openFolderButton.contentTintColor = colors.secondaryText
-        openFolderButton.toolTip = shortcutTooltip("Open Folder", for: .openFolder)
-        openFolderButton.translatesAutoresizingMaskIntoConstraints = false
-        sidebarView.addSubview(openFolderButton)
+        // Quota/context usage widget (hidden until data arrives)
+        sidebarView.addSubview(quotaView)
 
         NSLayoutConstraint.activate([
             sidebarStackView.topAnchor.constraint(equalTo: sidebarView.topAnchor),
             sidebarStackView.leadingAnchor.constraint(equalTo: sidebarView.leadingAnchor),
             sidebarStackView.trailingAnchor.constraint(equalTo: sidebarView.trailingAnchor),
 
-            openFolderButton.leadingAnchor.constraint(equalTo: sidebarView.leadingAnchor, constant: 8),
-            openFolderButton.bottomAnchor.constraint(equalTo: sidebarView.bottomAnchor, constant: -8),
+            quotaView.leadingAnchor.constraint(equalTo: sidebarView.leadingAnchor, constant: 8),
+            quotaView.trailingAnchor.constraint(equalTo: sidebarView.trailingAnchor, constant: -8),
+            quotaView.bottomAnchor.constraint(equalTo: sidebarView.bottomAnchor, constant: -8),
 
             sidebarDropZone.topAnchor.constraint(equalTo: sidebarStackView.bottomAnchor),
-            sidebarDropZone.bottomAnchor.constraint(equalTo: openFolderButton.topAnchor, constant: -4),
+            sidebarDropZone.bottomAnchor.constraint(equalTo: quotaView.topAnchor),
             sidebarDropZone.leadingAnchor.constraint(equalTo: sidebarView.leadingAnchor),
             sidebarDropZone.trailingAnchor.constraint(equalTo: sidebarView.trailingAnchor),
         ])
@@ -321,28 +315,6 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
             terminalContainerView.leadingAnchor.constraint(equalTo: rightPane.leadingAnchor),
             terminalContainerView.trailingAnchor.constraint(equalTo: rightPane.trailingAnchor),
             terminalContainerView.bottomAnchor.constraint(equalTo: rightPane.bottomAnchor),
-        ])
-
-        // Context usage progress bar (1px line at bottom of terminal)
-        contextProgressBar.translatesAutoresizingMaskIntoConstraints = false
-        contextProgressBar.wantsLayer = true
-        contextProgressBar.layer?.backgroundColor = NSColor.clear.cgColor
-        contextProgressBar.isHidden = true
-        rightPane.addSubview(contextProgressBar)
-
-        contextProgressFill.translatesAutoresizingMaskIntoConstraints = false
-        contextProgressFill.wantsLayer = true
-        contextProgressFill.layer?.backgroundColor = NSColor(red: 0.4, green: 0.7, blue: 0.4, alpha: 1.0).cgColor
-        contextProgressBar.addSubview(contextProgressFill)
-
-        NSLayoutConstraint.activate([
-            contextProgressBar.leadingAnchor.constraint(equalTo: rightPane.leadingAnchor),
-            contextProgressBar.trailingAnchor.constraint(equalTo: rightPane.trailingAnchor),
-            contextProgressBar.bottomAnchor.constraint(equalTo: rightPane.bottomAnchor),
-            contextProgressBar.heightAnchor.constraint(equalToConstant: 1),
-            contextProgressFill.leadingAnchor.constraint(equalTo: contextProgressBar.leadingAnchor),
-            contextProgressFill.topAnchor.constraint(equalTo: contextProgressBar.topAnchor),
-            contextProgressFill.bottomAnchor.constraint(equalTo: contextProgressBar.bottomAnchor),
         ])
 
         splitView.addArrangedSubview(sidebarView)
@@ -759,63 +731,44 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         emptyStateView?.isHidden = true
     }
 
-    private var progressWidthConstraint: NSLayoutConstraint?
+
 
     private func refreshContextBar(for tab: TabItem) {
         contextTimer?.invalidate()
         contextTimer = nil
 
         if tab.isClaude {
-            contextProgressBar.isHidden = false
             updateContextUsage(for: tab)
             contextTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
                 self?.updateContextUsage(for: tab)
             }
         } else {
-            contextProgressBar.isHidden = true
+            quotaView.updateContext(usage: nil, tabName: nil)
         }
     }
 
     private func updateContextUsage(for tab: TabItem) {
         guard let sessionId = tab.sessionId,
               let project = currentProject else {
-            applyContextUsage(nil)
+            quotaView.updateContext(usage: nil, tabName: nil)
             return
         }
 
+        let tabName = tab.name
         let projectPath = project.path
+        let allPaths = projects.map { $0.path }
         DispatchQueue.global(qos: .utility).async {
             let usage = ContextMonitor.shared.getUsage(sessionId: sessionId, projectPath: projectPath)
+            let rate = QuotaMonitor.shared.computeTokenRate(projectPaths: allPaths)
             DispatchQueue.main.async { [weak self] in
-                guard let usage = usage else { return }
-                self?.applyContextUsage(usage)
+                guard let self = self else { return }
+                self.quotaView.updateContext(usage: usage, tabName: tabName)
+                self.quotaView.update(
+                    snapshot: QuotaMonitor.shared.latest,
+                    tokenRate: rate,
+                    sparklineData: QuotaMonitor.shared.sparklineData)
             }
         }
-    }
-
-    private func applyContextUsage(_ usage: ContextMonitor.ContextUsage?) {
-        guard let usage = usage else {
-            progressWidthConstraint?.isActive = false
-            progressWidthConstraint = contextProgressFill.widthAnchor.constraint(equalToConstant: 0)
-            progressWidthConstraint?.isActive = true
-            return
-        }
-
-        let fraction = CGFloat(usage.percentage) / 100.0
-        let barWidth = contextProgressBar.bounds.width * fraction
-
-        let color: NSColor
-        switch Int(usage.percentage) {
-        case 0..<50: color = NSColor(red: 0.4, green: 0.7, blue: 0.4, alpha: 1.0)
-        case 50..<75: color = .systemYellow
-        case 75..<90: color = .systemOrange
-        default: color = .systemRed
-        }
-
-        contextProgressFill.layer?.backgroundColor = color.cgColor
-        progressWidthConstraint?.isActive = false
-        progressWidthConstraint = contextProgressFill.widthAnchor.constraint(equalToConstant: barWidth)
-        progressWidthConstraint?.isActive = true
     }
 
     // MARK: - Process Monitor
@@ -1240,6 +1193,16 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
 
     // MARK: - Theme
 
+    @objc private func quotaDidChange() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.quotaView.update(
+                snapshot: QuotaMonitor.shared.latest,
+                tokenRate: QuotaMonitor.shared.tokenRate,
+                sparklineData: QuotaMonitor.shared.sparklineData)
+        }
+    }
+
     @objc private func themeDidChange(_ notification: Notification) {
         guard let scheme = notification.userInfo?["scheme"] as? TerminalColorScheme else { return }
 
@@ -1251,6 +1214,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         sidebarView.layer?.backgroundColor = newColors.sidebarBackground.cgColor
         tabBar.layer?.backgroundColor = newColors.tabBarBackground.cgColor
         emptyStateView?.layer?.backgroundColor = newColors.background.cgColor
+        quotaView.applyTheme(colors: newColors)
         rebuildSidebar()
         rebuildTabBar()
 

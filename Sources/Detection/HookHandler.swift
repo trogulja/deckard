@@ -18,13 +18,15 @@ class HookHandler {
                     windowController?.updateSessionId(forSurfaceId: surfaceId, sessionId: sessionId)
                 }
             }
+            forwardRateLimits(from: message)
             reply(ControlResponse(ok: true))
 
-        case "hook.stop":
-            // Claude finished responding — waiting for user input
+        case "hook.stop", "hook.stop-failure":
+            // Claude finished responding (or hit a limit/error) — waiting for user input
             if let surfaceId = message.surfaceId {
                 windowController?.updateBadge(forSurfaceId: surfaceId, state: .waitingForInput)
             }
+            forwardRateLimits(from: message)
             reply(ControlResponse(ok: true))
 
         case "hook.notification":
@@ -43,6 +45,7 @@ class HookHandler {
             if let surfaceId = message.surfaceId {
                 windowController?.updateBadge(forSurfaceId: surfaceId, state: .thinking)
             }
+            forwardRateLimits(from: message)
             reply(ControlResponse(ok: true))
 
         case "hook.pre-tool-use":
@@ -50,6 +53,11 @@ class HookHandler {
             if let surfaceId = message.surfaceId {
                 windowController?.updateBadge(forSurfaceId: surfaceId, state: .thinking)
             }
+            forwardRateLimits(from: message)
+            reply(ControlResponse(ok: true))
+
+        case "hook.post-tool-use":
+            forwardRateLimits(from: message)
             reply(ControlResponse(ok: true))
 
         // --- Process registration ---
@@ -92,11 +100,29 @@ class HookHandler {
             }
             reply(ControlResponse(ok: true))
 
+        // --- Quota update from StatusLine command ---
+
+        case "quota-update":
+            forwardRateLimits(from: message)
+            reply(ControlResponse(ok: true))
+
         case "ping":
             reply(ControlResponse(ok: true, message: "pong"))
 
         default:
             reply(ControlResponse(ok: false, error: "unknown command: \(message.command)"))
+        }
+    }
+
+    private func forwardRateLimits(from message: ControlMessage) {
+        DiagnosticLog.shared.log("quota",
+            "hook=\(message.command) 5h=\(message.fiveHourUsed.map { String($0) } ?? "nil") 7d=\(message.sevenDayUsed.map { String($0) } ?? "nil")")
+        if message.fiveHourUsed != nil || message.sevenDayUsed != nil {
+            QuotaMonitor.shared.update(
+                fiveHourUsed: message.fiveHourUsed,
+                fiveHourResetsAt: message.fiveHourResetsAt,
+                sevenDayUsed: message.sevenDayUsed,
+                sevenDayResetsAt: message.sevenDayResetsAt)
         }
     }
 

@@ -21,9 +21,9 @@ final class DeckardHooksInstallerTests: XCTestCase {
 
     func testExpectedHookEvents() {
         // DeckardHooksInstaller handles these events
-        let expectedEvents = ["SessionStart", "Stop", "PreToolUse", "Notification", "UserPromptSubmit"]
+        let expectedEvents = ["SessionStart", "Stop", "StopFailure", "PreToolUse", "Notification", "UserPromptSubmit"]
         // Verify the event list is as expected by checking the count
-        XCTAssertEqual(expectedEvents.count, 5)
+        XCTAssertEqual(expectedEvents.count, 6)
     }
 
     // MARK: - Settings merge with temp files
@@ -125,6 +125,9 @@ final class DeckardHooksInstallerTests: XCTestCase {
             "DECKARD_SURFACE_ID",
             "nc -U",
             "hook.",
+            "rate_limits",     // rate limit extraction from stdin
+            "fiveHourUsed",    // fields sent to Deckard
+            "sevenDayUsed",
         ]
 
         // Since hookScript is private, we verify the markers exist in the installed file

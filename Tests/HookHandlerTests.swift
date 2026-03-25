@@ -59,6 +59,20 @@ final class HookHandlerTests: XCTestCase {
         waitForExpectations(timeout: 2)
     }
 
+    // MARK: - Hook.stop-failure
+
+    func testHookStopFailureReturnsOk() {
+        let msg = ControlMessage(command: "hook.stop-failure", surfaceId: "surf-1")
+        let expectation = expectation(description: "hook.stop-failure reply")
+
+        handler.handle(msg) { response in
+            XCTAssertTrue(response.ok)
+            expectation.fulfill()
+        }
+
+        waitForExpectations(timeout: 2)
+    }
+
     // MARK: - Hook.session-start
 
     func testHookSessionStartReturnsOk() {
@@ -203,6 +217,68 @@ final class HookHandlerTests: XCTestCase {
         }
 
         waitForExpectations(timeout: 2)
+    }
+
+    // MARK: - Hook post-tool-use
+
+    func testHookPostToolUseReturnsOk() {
+        let msg = ControlMessage(command: "hook.post-tool-use")
+        let expectation = expectation(description: "hook.post-tool-use reply")
+
+        handler.handle(msg) { response in
+            XCTAssertTrue(response.ok)
+            expectation.fulfill()
+        }
+
+        waitForExpectations(timeout: 2)
+    }
+
+    // MARK: - Rate limit forwarding
+
+    func testHookStopWithRateLimitsForwardsToQuotaMonitor() {
+        QuotaMonitor.shared.resetForTesting()
+
+        var msg = ControlMessage(command: "hook.stop")
+        msg.surfaceId = "surf-1"
+        msg.fiveHourUsed = 72.0
+        msg.fiveHourResetsAt = 1774466400
+        msg.sevenDayUsed = 35.0
+        msg.sevenDayResetsAt = 1774900800
+
+        let expectation = expectation(description: "hook.stop with rate limits")
+
+        handler.handle(msg) { response in
+            XCTAssertTrue(response.ok)
+            expectation.fulfill()
+        }
+
+        waitForExpectations(timeout: 2)
+
+        let snapshot = QuotaMonitor.shared.latest
+        XCTAssertNotNil(snapshot)
+        XCTAssertEqual(snapshot?.fiveHourUsed, 72.0)
+        XCTAssertEqual(snapshot?.sevenDayUsed, 35.0)
+        XCTAssertNotNil(snapshot?.fiveHourResetsAt)
+        XCTAssertNotNil(snapshot?.sevenDayResetsAt)
+    }
+
+    func testHookStopWithoutRateLimitsDoesNotClearQuotaMonitor() {
+        QuotaMonitor.shared.resetForTesting()
+        QuotaMonitor.shared.update(fiveHourUsed: 50.0, fiveHourResetsAt: nil,
+                                   sevenDayUsed: 20.0, sevenDayResetsAt: nil)
+
+        let msg = ControlMessage(command: "hook.stop", surfaceId: "surf-1")
+        let expectation = expectation(description: "hook.stop without rate limits")
+
+        handler.handle(msg) { response in
+            XCTAssertTrue(response.ok)
+            expectation.fulfill()
+        }
+
+        waitForExpectations(timeout: 2)
+
+        // QuotaMonitor should still have the previous values
+        XCTAssertEqual(QuotaMonitor.shared.latest?.fiveHourUsed, 50.0)
     }
 
     // MARK: - Create tab

@@ -52,6 +52,9 @@
 		AA1D0001AA1D0001AA1D0001 /* CrashReporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1D0002AA1D0002AA1D0002 /* CrashReporterTests.swift */; };
 		AA1E0001AA1E0001AA1E0001 /* ControlSocketTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1E0002AA1E0002AA1E0002 /* ControlSocketTests.swift */; };
 		AA1F0001AA1F0001AA1F0001 /* SidebarFolderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1F0002AA1F0002AA1F0002 /* SidebarFolderTests.swift */; };
+		QA200002QA200002QA200002 /* QuotaMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = QA200001QA200001QA200001 /* QuotaMonitor.swift */; };
+		QA200004QA200004QA200004 /* QuotaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = QA200003QA200003QA200003 /* QuotaView.swift */; };
+		QA200006QA200006QA200006 /* QuotaMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = QA200005QA200005QA200005 /* QuotaMonitorTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -101,6 +104,9 @@
 		AA1D0002AA1D0002AA1D0002 /* CrashReporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReporterTests.swift; sourceTree = "<group>"; };
 		AA1E0002AA1E0002AA1E0002 /* ControlSocketTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlSocketTests.swift; sourceTree = "<group>"; };
 		AA1F0002AA1F0002AA1F0002 /* SidebarFolderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarFolderTests.swift; sourceTree = "<group>"; };
+		QA200001QA200001QA200001 /* QuotaMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaMonitor.swift; sourceTree = "<group>"; };
+		QA200003QA200003QA200003 /* QuotaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaView.swift; sourceTree = "<group>"; };
+		QA200005QA200005QA200005 /* QuotaMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaMonitorTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -132,6 +138,7 @@
 				DD330002DD330002DD330002 /* DiagnosticLog.swift */,
 				4A2B375A023FEBCB272DCFD7 /* HookHandler.swift */,
 				DD220002DD220002DD220002 /* ProcessMonitor.swift */,
+				QA200001QA200001QA200001 /* QuotaMonitor.swift */,
 			);
 			path = Detection;
 			sourceTree = "<group>";
@@ -182,6 +189,7 @@
 				8391EFB62A21AFA1DA62733F /* DeckardWindowController.swift */,
 				SC000002SC000002SC000002 /* SidebarController.swift */,
 				TB000002TB000002TB000002 /* TabBarController.swift */,
+				QA200003QA200003QA200003 /* QuotaView.swift */,
 				SV000002SV000002SV000002 /* SidebarViews.swift */,
 				TV000002TV000002TV000002 /* TabBarViews.swift */,
 				4BE07F0C0F9D62925EF195F7 /* ProjectPicker.swift */,
@@ -240,6 +248,7 @@
 				AA160002AA160002AA160002 /* DiagnosticLogTests.swift */,
 				AA170002AA170002AA170002 /* HookHandlerTests.swift */,
 				AA180002AA180002AA180002 /* ProcessMonitorTests.swift */,
+				QA200005QA200005QA200005 /* QuotaMonitorTests.swift */,
 				AA130002AA130002AA130002 /* SessionStateTests.swift */,
 				AA1F0002AA1F0002AA1F0002 /* SidebarFolderTests.swift */,
 				TE000001TE000001TE000001 /* SmokeTests.swift */,
@@ -396,6 +405,8 @@
 				DD220001DD220001DD220001 /* ProcessMonitor.swift in Sources */,
 				DD330001DD330001DD330001 /* DiagnosticLog.swift in Sources */,
 				DD440001DD440001DD440001 /* CrashReporter.swift in Sources */,
+				QA200002QA200002QA200002 /* QuotaMonitor.swift in Sources */,
+				QA200004QA200004QA200004 /* QuotaView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -419,6 +430,7 @@
 				AA1D0001AA1D0001AA1D0001 /* CrashReporterTests.swift in Sources */,
 				AA1E0001AA1E0001AA1E0001 /* ControlSocketTests.swift in Sources */,
 				AA1F0001AA1F0001AA1F0001 /* SidebarFolderTests.swift in Sources */,
+				QA200006QA200006QA200006 /* QuotaMonitorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -245,6 +245,11 @@ struct ControlMessage: Codable {
     var tabId: String?
     var key: String?
     var value: String?
+    // Rate limit data from Claude Code hooks
+    var fiveHourUsed: Double?
+    var fiveHourResetsAt: Double?
+    var sevenDayUsed: Double?
+    var sevenDayResetsAt: Double?
 }
 
 struct ControlResponse: Codable {

@@ -14,6 +14,7 @@ enum DeckardHooksInstaller {
         [ -z "$DECKARD_SOCKET_PATH" ] && exit 0
 
         EVENT="$1"
+        cat > /dev/null  # drain stdin (hooks don't carry rate_limits)
         EXTRA=""
 
         # For session-start, walk parent PIDs to find the Claude session ID
@@ -38,8 +39,44 @@ enum DeckardHooksInstaller {
           | nc -U "$DECKARD_SOCKET_PATH" -w 1 2>/dev/null
         """
 
+    /// StatusLine script — receives the full /status JSON on stdin (which includes
+    /// rate_limits), extracts the quota data, and sends it to Deckard's control socket.
+    /// Its stdout is ignored (empty) so it doesn't affect Claude Code's status line.
+    private static let statusLineScript = """
+        #!/bin/sh
+        [ -z "$DECKARD_SOCKET_PATH" ] && exit 0
+        _PY=$(mktemp)
+        cat > "$_PY" << 'PYEOF'
+        import json,sys,socket,os
+        try:
+            d=json.loads(sys.stdin.read());rl=d.get("rate_limits",{})
+            fh=rl.get("five_hour",{});sd=rl.get("seven_day",{})
+            if not fh and not sd: sys.exit(0)
+            q=chr(34);p=[]
+            if "used_percentage" in fh:p.append(q+"fiveHourUsed"+q+":"+str(fh["used_percentage"]))
+            if "resets_at" in fh:p.append(q+"fiveHourResetsAt"+q+":"+str(fh["resets_at"]))
+            if "used_percentage" in sd:p.append(q+"sevenDayUsed"+q+":"+str(sd["used_percentage"]))
+            if "resets_at" in sd:p.append(q+"sevenDayResetsAt"+q+":"+str(sd["resets_at"]))
+            if not p: sys.exit(0)
+            msg="{"+q+"command"+q+":"+q+"quota-update"+q+","+",".join(p)+"}"
+            sock=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
+            sock.settimeout(1)
+            sock.connect(os.environ["DECKARD_SOCKET_PATH"])
+            sock.sendall((msg+"\\n").encode())
+            sock.recv(256)
+            sock.close()
+        except:pass
+        PYEOF
+        python3 "$_PY"
+        rm -f "$_PY"
+        """
+
     private static let hookScriptPath: String = {
         NSHomeDirectory() + "/.deckard/hooks/notify.sh"
+    }()
+
+    private static let statusLineScriptPath: String = {
+        NSHomeDirectory() + "/.deckard/hooks/statusline.sh"
     }()
 
     private static let settingsPath: String = {
@@ -49,6 +86,7 @@ enum DeckardHooksInstaller {
     private static let hookEvents: [(key: String, arg: String)] = [
         ("SessionStart", "session-start"),
         ("Stop", "stop"),
+        ("StopFailure", "stop-failure"),
         ("PreToolUse", "pre-tool-use"),
         ("Notification", "notification"),
         ("UserPromptSubmit", "user-prompt-submit"),
@@ -65,12 +103,12 @@ enum DeckardHooksInstaller {
         let dir = (hookScriptPath as NSString).deletingLastPathComponent
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
 
-        // Always overwrite to keep the script up to date.
-        try? hookScript.write(toFile: hookScriptPath, atomically: true, encoding: .utf8)
-
-        // Make executable
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o755], ofItemAtPath: hookScriptPath)
+        // Always overwrite to keep the scripts up to date.
+        for (script, path) in [(hookScript, hookScriptPath), (statusLineScript, statusLineScriptPath)] {
+            try? script.write(toFile: path, atomically: true, encoding: .utf8)
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o755], ofItemAtPath: path)
+        }
     }
 
     private static func mergeHooksIntoSettings() {
@@ -121,6 +159,14 @@ enum DeckardHooksInstaller {
         }
 
         settings["hooks"] = hooks
+
+        // Configure statusLine command to receive rate_limits from Claude Code.
+        // The statusLine receives the full /status JSON on stdin (which includes
+        // rate_limits) — unlike regular hooks which only get event-specific data.
+        settings["statusLine"] = [
+            "type": "command",
+            "command": statusLineScriptPath,
+        ] as [String: Any]
 
         // Write back — use .withoutEscapingSlashes to avoid \/ in paths
         if let data = try? JSONSerialization.data(
