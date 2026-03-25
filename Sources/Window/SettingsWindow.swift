@@ -649,147 +649,141 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     }
 
     private func makeBadgeColorGrid() -> NSView {
-        let borderColor = NSColor.separatorColor.cgColor
-        let rowHeight: CGFloat = 28
-        let colWidths: [CGFloat] = [70, 120, 50, 50]  // section, state, color, blink
-        let tableWidth = colWidths.reduce(0, +)
 
-        let allSections: [(title: String, entries: [(state: TabItem.BadgeState, label: String)])] = [
-            ("Claude", Self.claudeBadgeEntries),
-            ("Terminal", Self.terminalBadgeEntries),
-        ]
+        func makeSectionTable(_ title: String,
+                              _ entries: [(state: TabItem.BadgeState, label: String)]) -> NSView {
+            let borderColor = NSColor.separatorColor.cgColor
+            let rowHeight: CGFloat = 28
+            let colWidths: [CGFloat] = [120, 50, 50]  // state, color, blink
+            let tableWidth = colWidths.reduce(0, +)
+            let totalRows = 1 + entries.count
 
-        // Count total rows: header + all entries
-        let totalRows = 1 + allSections.reduce(0) { $0 + $1.entries.count }
-
-        let container = NSView()
-        container.wantsLayer = true
-        container.layer?.borderColor = borderColor
-        container.layer?.borderWidth = 1
-        container.layer?.cornerRadius = 4
-        container.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            container.widthAnchor.constraint(equalToConstant: tableWidth),
-            container.heightAnchor.constraint(equalToConstant: CGFloat(totalRows) * rowHeight),
-        ])
-
-        func makeCell(_ width: CGFloat, y: CGFloat) -> NSView {
-            let cell = NSView()
-            cell.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(cell)
+            let container = NSView()
+            container.wantsLayer = true
+            container.layer?.borderColor = borderColor
+            container.layer?.borderWidth = 1
+            container.layer?.cornerRadius = 4
+            container.translatesAutoresizingMaskIntoConstraints = false
             NSLayoutConstraint.activate([
-                cell.widthAnchor.constraint(equalToConstant: width),
-                cell.heightAnchor.constraint(equalToConstant: rowHeight),
+                container.widthAnchor.constraint(equalToConstant: tableWidth),
+                container.heightAnchor.constraint(equalToConstant: CGFloat(totalRows) * rowHeight),
             ])
-            return cell
-        }
 
-        func addHLine(y: CGFloat) {
-            let line = NSView()
-            line.wantsLayer = true
-            line.layer?.backgroundColor = borderColor
-            line.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(line)
-            NSLayoutConstraint.activate([
-                line.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                line.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                line.topAnchor.constraint(equalTo: container.topAnchor, constant: y),
-                line.heightAnchor.constraint(equalToConstant: 1),
-            ])
-        }
+            func addHLine(y: CGFloat) {
+                let line = NSView()
+                line.wantsLayer = true
+                line.layer?.backgroundColor = borderColor
+                line.translatesAutoresizingMaskIntoConstraints = false
+                container.addSubview(line)
+                NSLayoutConstraint.activate([
+                    line.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                    line.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                    line.topAnchor.constraint(equalTo: container.topAnchor, constant: y),
+                    line.heightAnchor.constraint(equalToConstant: 1),
+                ])
+            }
 
-        func addVLine(x: CGFloat, fromY: CGFloat, toY: CGFloat) {
-            let line = NSView()
-            line.wantsLayer = true
-            line.layer?.backgroundColor = borderColor
-            line.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(line)
-            NSLayoutConstraint.activate([
-                line.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: x),
-                line.widthAnchor.constraint(equalToConstant: 1),
-                line.topAnchor.constraint(equalTo: container.topAnchor, constant: fromY),
-                line.heightAnchor.constraint(equalToConstant: toY - fromY),
-            ])
-        }
+            func addVLine(x: CGFloat, fromY: CGFloat, toY: CGFloat) {
+                let line = NSView()
+                line.wantsLayer = true
+                line.layer?.backgroundColor = borderColor
+                line.translatesAutoresizingMaskIntoConstraints = false
+                container.addSubview(line)
+                NSLayoutConstraint.activate([
+                    line.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: x),
+                    line.widthAnchor.constraint(equalToConstant: 1),
+                    line.topAnchor.constraint(equalTo: container.topAnchor, constant: fromY),
+                    line.heightAnchor.constraint(equalToConstant: toY - fromY),
+                ])
+            }
 
-        func placeView(_ view: NSView, x: CGFloat, y: CGFloat, width: CGFloat) {
-            view.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(view)
-            NSLayoutConstraint.activate([
-                view.centerYAnchor.constraint(equalTo: container.topAnchor, constant: y + rowHeight / 2),
-                view.centerXAnchor.constraint(equalTo: container.leadingAnchor, constant: x + width / 2),
-            ])
-        }
+            func placeView(_ view: NSView, x: CGFloat, y: CGFloat, width: CGFloat) {
+                view.translatesAutoresizingMaskIntoConstraints = false
+                container.addSubview(view)
+                NSLayoutConstraint.activate([
+                    view.centerYAnchor.constraint(equalTo: container.topAnchor,
+                                                  constant: y + rowHeight / 2),
+                    view.centerXAnchor.constraint(equalTo: container.leadingAnchor,
+                                                  constant: x + width / 2),
+                ])
+            }
 
-        func placeLabel(_ text: String, x: CGFloat, y: CGFloat, width: CGFloat, bold: Bool = false, align: NSTextAlignment = .center) {
-            let label = NSTextField(labelWithString: text)
-            label.font = bold ? .systemFont(ofSize: 11, weight: .medium) : .systemFont(ofSize: 12)
-            label.textColor = bold ? .secondaryLabelColor : .labelColor
-            label.alignment = align
-            placeView(label, x: x, y: y, width: width)
-        }
+            func placeLabel(_ text: String, x: CGFloat, y: CGFloat,
+                            width: CGFloat, bold: Bool = false) {
+                let label = NSTextField(labelWithString: text)
+                label.font = bold ? .systemFont(ofSize: 11, weight: .medium)
+                                  : .systemFont(ofSize: 12)
+                label.textColor = bold ? .secondaryLabelColor : .labelColor
+                label.alignment = .center
+                placeView(label, x: x, y: y, width: width)
+            }
 
-        // Header row
-        var x: CGFloat = 0
-        placeLabel("", x: x, y: 0, width: colWidths[0], bold: true)
-        x += colWidths[0]
-        placeLabel("State", x: x, y: 0, width: colWidths[1], bold: true)
-        x += colWidths[1]
-        placeLabel("Color", x: x, y: 0, width: colWidths[2], bold: true)
-        x += colWidths[2]
-        placeLabel("Blink", x: x, y: 0, width: colWidths[3], bold: true)
+            // Header row
+            var x: CGFloat = 0
+            placeLabel("State", x: x, y: 0, width: colWidths[0], bold: true)
+            x += colWidths[0]
+            placeLabel("Color", x: x, y: 0, width: colWidths[1], bold: true)
+            x += colWidths[1]
+            placeLabel("Blink", x: x, y: 0, width: colWidths[2], bold: true)
 
-        addHLine(y: rowHeight)
+            addHLine(y: rowHeight)
 
-        // Vertical lines for all columns
-        x = colWidths[0]
-        for i in 1..<colWidths.count {
-            addVLine(x: x, fromY: 0, toY: CGFloat(totalRows) * rowHeight)
-            x += colWidths[i]
-        }
+            // Vertical lines
+            x = colWidths[0]
+            for i in 1..<colWidths.count {
+                addVLine(x: x, fromY: 0, toY: CGFloat(totalRows) * rowHeight)
+                x += colWidths[i]
+            }
 
-        // Data rows
-        var row = 1
-        for (si, section) in allSections.enumerated() {
-            for (ei, entry) in section.entries.enumerated() {
-                let y = CGFloat(row) * rowHeight
+            // Data rows
+            for (ei, entry) in entries.enumerated() {
+                let y = CGFloat(ei + 1) * rowHeight
 
-                // Section label — only on first entry of each section
-                if ei == 0 {
-                    placeLabel(section.title, x: 0, y: y, width: colWidths[0], bold: true)
-                }
+                placeLabel(entry.label, x: 0, y: y, width: colWidths[0])
 
-                // State label
-                placeLabel(entry.label, x: colWidths[0], y: y, width: colWidths[1])
-
-                // Color well
                 let well = makeBadgeColorWell(for: entry.state)
-                placeView(well, x: colWidths[0] + colWidths[1], y: y, width: colWidths[2])
+                placeView(well, x: colWidths[0], y: y, width: colWidths[1])
 
-                // Blink toggle
-                let toggle = NSButton(checkboxWithTitle: "", target: self, action: #selector(badgeAnimateChanged(_:)))
+                let toggle = NSButton(checkboxWithTitle: "", target: self,
+                                      action: #selector(badgeAnimateChanged(_:)))
                 toggle.state = Self.isBadgeAnimated(entry.state) ? .on : .off
                 toggle.controlSize = .small
-                objc_setAssociatedObject(toggle, &settingsKeyAssoc, entry.state.rawValue, .OBJC_ASSOCIATION_RETAIN)
-                placeView(toggle, x: colWidths[0] + colWidths[1] + colWidths[2], y: y, width: colWidths[3])
+                objc_setAssociatedObject(toggle, &settingsKeyAssoc,
+                                         entry.state.rawValue, .OBJC_ASSOCIATION_RETAIN)
+                placeView(toggle, x: colWidths[0] + colWidths[1], y: y, width: colWidths[2])
 
                 addHLine(y: y + rowHeight)
-                row += 1
             }
 
-            // Section separator (thicker line between Claude and Terminal)
-            if si < allSections.count - 1 {
-                // The horizontal line is already drawn — we could make it thicker
-                // but the regular 1px line is fine for a spreadsheet look
-            }
+            // Title label above the table
+            let titleLabel = NSTextField(labelWithString: title)
+            titleLabel.font = .systemFont(ofSize: 11, weight: .medium)
+            titleLabel.textColor = .secondaryLabelColor
+
+            let stack = NSStackView()
+            stack.orientation = .vertical
+            stack.alignment = .leading
+            stack.spacing = 4
+            stack.addArrangedSubview(titleLabel)
+            stack.addArrangedSubview(container)
+
+            return stack
         }
+
+        let claudeTable = makeSectionTable("Claude", Self.claudeBadgeEntries)
+        let terminalTable = makeSectionTable("Terminal", Self.terminalBadgeEntries)
+
+        let hStack = NSStackView(views: [claudeTable, terminalTable])
+        hStack.orientation = .horizontal
+        hStack.alignment = .top
+        hStack.spacing = 16
 
         // Wrap in a vertical stack with the reset button
         let wrapper = NSStackView()
         wrapper.orientation = .vertical
         wrapper.alignment = .trailing
         wrapper.spacing = 8
-        wrapper.addArrangedSubview(container)
+        wrapper.addArrangedSubview(hStack)
 
         let resetButton = NSButton(title: "Reset to Defaults", target: self, action: #selector(resetBadgeColors))
         resetButton.bezelStyle = .rounded
