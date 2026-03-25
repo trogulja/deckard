@@ -41,8 +41,11 @@ class SparklineView: NSView {
         for (i, val) in data.enumerated() {
             let x = CGFloat(i) * step
             let y = CGFloat(val / maxVal) * h
-            if i == 0 { strokePath.move(to: NSPoint(x: x, y: y)) }
-            else { strokePath.line(to: NSPoint(x: x, y: y)) }
+            if i == 0 {
+                strokePath.move(to: NSPoint(x: x, y: y))
+            } else {
+                strokePath.line(to: NSPoint(x: x, y: y))
+            }
         }
 
         strokeColor.setStroke()

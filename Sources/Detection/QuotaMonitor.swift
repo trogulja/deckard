@@ -27,13 +27,10 @@ class QuotaMonitor {
     /// Returns the live snapshot if available, otherwise the cached snapshot
     /// (but only after a 2-second grace period to avoid flashing stale values
     /// before fresh statusLine data arrives).
-    private(set) var latest: QuotaSnapshot? {
-        get {
-            if let live = liveSnapshot { return live }
-            if Date().timeIntervalSince(launchTime) > 2.0 { return cachedSnapshot }
-            return nil
-        }
-        set { /* unused — set via liveSnapshot/cachedSnapshot */ }
+    var latest: QuotaSnapshot? {
+        if let live = liveSnapshot { return live }
+        if Date().timeIntervalSince(launchTime) > 2.0 { return cachedSnapshot }
+        return nil
     }
 
     private(set) var tokenRate: TokenRate?
