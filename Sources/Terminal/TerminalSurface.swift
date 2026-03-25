@@ -287,6 +287,8 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
     set -g mouse on
     set -g default-terminal xterm-256color
     set -g allow-passthrough on
+    bind-key -T copy-mode MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel pbcopy
+    bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel pbcopy
     """
 
     /// Apply tmux options (from UserDefaults or defaults) to a session.

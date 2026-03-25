@@ -554,7 +554,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             tmuxField.topAnchor.constraint(equalTo: tmuxOptionsLabel.bottomAnchor, constant: 4),
             tmuxField.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 20),
             tmuxField.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -20),
-            tmuxField.heightAnchor.constraint(equalToConstant: 80),
+            tmuxField.heightAnchor.constraint(equalToConstant: 240),
 
             tmuxHelpLabel.topAnchor.constraint(equalTo: tmuxField.bottomAnchor, constant: 4),
             tmuxHelpLabel.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: 20),
