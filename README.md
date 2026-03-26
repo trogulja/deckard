@@ -6,7 +6,7 @@ Run multiple sessions side by side in a single window with tabs, projects, and s
 
 <p align="center">
   <a href="https://github.com/gi11es/deckard/releases/latest/download/Deckard.dmg">
-    <img alt="Download for macOS" src="https://img.shields.io/badge/-Download_for_macOS-000000?style=for-the-badge&logo=apple&logoColor=white" height="48">
+    <img alt="Download for macOS" src="https://img.shields.io/badge/-Download_for_macOS-2563eb?style=for-the-badge&logo=apple&logoColor=white" height="56">
   </a>
   <br><br>
   <a href="https://github.com/gi11es/deckard/releases">
