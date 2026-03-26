@@ -194,6 +194,9 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         return image
     }
 
+    /// True while the project name text field is being edited.
+    var isEditingName: Bool { label.isEditable }
+
     private func startEditing() {
         label.isEditable = true
         label.isSelectable = true
@@ -398,6 +401,9 @@ class SidebarFolderView: NSView, NSTextFieldDelegate, NSDraggingSource {
             NSMenu.popUpContextMenu(menu, with: event, for: self)
         }
     }
+
+    /// True while the folder name text field is being edited.
+    var isEditingName: Bool { label.isEditable }
 
     func startEditing() {
         label.isEditable = true

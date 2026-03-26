@@ -35,7 +35,20 @@ extension DeckardWindowController {
 
     // MARK: - Sidebar Rebuild
 
+    /// True when any sidebar row is being inline-edited (rename).
+    private var isSidebarEditing: Bool {
+        sidebarStackView.arrangedSubviews.contains { view in
+            if let fv = view as? SidebarFolderView, fv.isEditingName { return true }
+            if let rv = view as? VerticalTabRowView, rv.isEditingName { return true }
+            return false
+        }
+    }
+
     func rebuildSidebar() {
+        // Don't tear down the sidebar while the user is renaming an item —
+        // the active field editor would be destroyed, causing focus loss.
+        if isSidebarEditing { return }
+
         let savedFR = window?.firstResponder
         defer {
             if let terminal = currentTerminalView, savedFR === terminal,

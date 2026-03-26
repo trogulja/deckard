@@ -506,22 +506,47 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
             currentTerminalView?.removeFromSuperview()
             currentTerminalView = nil
             rebuildTabBar()
+        } else if let next = nextVisibleProjectIndex(near: index) {
+            selectProject(at: next, autoExpandFolder: false)
         } else {
-            selectProject(at: min(index, projects.count - 1))
+            // All remaining projects are inside collapsed folders — show empty state.
+            selectedProjectIndex = -1
+            currentTerminalView?.removeFromSuperview()
+            currentTerminalView = nil
+            rebuildTabBar()
+            rebuildSidebar()
+            showEmptyState()
         }
         saveState()
     }
 
-    func selectProject(at index: Int) {
+    /// Returns the index of the nearest project that is visible in the sidebar
+    /// (i.e. top-level or inside a non-collapsed folder), or nil if none.
+    private func nextVisibleProjectIndex(near index: Int) -> Int? {
+        let collapsedProjectIds = Set(sidebarFolders.filter(\.isCollapsed).flatMap(\.projectIds))
+        let clamped = min(index, projects.count - 1)
+        // Search outward from `clamped`: check clamped, clamped-1, clamped+1, ...
+        var lo = clamped, hi = clamped + 1
+        while lo >= 0 || hi < projects.count {
+            if lo >= 0, !collapsedProjectIds.contains(projects[lo].id) { return lo }
+            if hi < projects.count, !collapsedProjectIds.contains(projects[hi].id) { return hi }
+            lo -= 1; hi += 1
+        }
+        return nil
+    }
+
+    func selectProject(at index: Int, autoExpandFolder: Bool = true) {
         guard index >= 0, index < projects.count else { return }
         selectedProjectIndex = index
 
         let project = projects[index]
 
         // Auto-expand folder if the selected project is inside a collapsed one
-        for folder in sidebarFolders where folder.isCollapsed && folder.projectIds.contains(project.id) {
-            folder.isCollapsed = false
-            rebuildSidebar()
+        if autoExpandFolder {
+            for folder in sidebarFolders where folder.isCollapsed && folder.projectIds.contains(project.id) {
+                folder.isCollapsed = false
+                rebuildSidebar()
+            }
         }
 
         rebuildTabBar()
