@@ -36,6 +36,19 @@ These files contain `x-release-please-version` annotations and are bumped automa
 
 Do not bump versions manually — merge the release-please PR instead.
 
+## Screenshot
+
+The README screenshot (`screenshot.png`) uses transparent corners. To update it:
+
+```bash
+# Trim 1px border, apply 12px rounded-corner mask, save as PNG32 with alpha
+magick screenshot_raw.jpg -crop {W-2}x{H-2}+1+1 +repage -alpha set \
+  \( -size {W-2}x{H-2} xc:none -fill white -draw "roundrectangle 0,0 {W-3},{H-3} 12,12" \) \
+  -compose DstIn -composite PNG32:screenshot.png
+```
+
+Must be PNG (JPG doesn't support transparency). Don't use flood fill — JPEG compression causes it to bleed into dark window content.
+
 ## Commit Messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/) prefixes:
