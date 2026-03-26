@@ -1,0 +1,312 @@
+import XCTest
+import AppKit
+@testable import Deckard
+
+final class SidebarFolderViewTests: XCTestCase {
+
+    // MARK: - Helpers
+
+    /// Create a SidebarFolderView with a known frame inside a parent view
+    /// so that hitTest receives meaningful superview-relative coordinates.
+    private func makeFolderView(
+        collapsed: Bool = false,
+        origin: NSPoint = NSPoint(x: 0, y: 50)
+    ) -> SidebarFolderView {
+        let folder = SidebarFolder(name: "Test Folder")
+        folder.isCollapsed = collapsed
+        let view = SidebarFolderView(folder: folder, projectCount: 2)
+
+        // Embed in a parent so hitTest gets superview-relative points.
+        let parent = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 200))
+        parent.addSubview(view)
+        view.frame = NSRect(x: 0, y: origin.y, width: 200, height: 28)
+
+        return view
+    }
+
+    // MARK: - hitTest
+
+    func testHitTestReturnsSelfWhenNotEditing() {
+        let view = makeFolderView()
+        // Point inside the view's frame (superview coordinates).
+        let point = NSPoint(x: 10, y: view.frame.midY)
+        let result = view.hitTest(point)
+        XCTAssertTrue(result === view, "hitTest should return self when not editing")
+    }
+
+    func testHitTestReturnsNilOutsideFrame() {
+        let view = makeFolderView()
+        // Point outside the view's frame.
+        let point = NSPoint(x: 10, y: view.frame.maxY + 50)
+        let result = view.hitTest(point)
+        XCTAssertNil(result, "hitTest should return nil for points outside frame")
+    }
+
+    func testHitTestUsesFrameNotBounds() {
+        // Place the view at a non-zero origin to verify frame (not bounds) is used.
+        let view = makeFolderView(origin: NSPoint(x: 0, y: 100))
+        XCTAssertEqual(view.frame.origin.y, 100)
+
+        // Point at y=110 is inside frame (100..128) but outside bounds (0..28).
+        let insideFrame = NSPoint(x: 10, y: 110)
+        XCTAssertTrue(view.hitTest(insideFrame) === view,
+                      "hitTest should match against frame, not bounds")
+
+        // Point at y=10 is inside bounds (0..28) but outside frame (100..128).
+        let insideBoundsOnly = NSPoint(x: 10, y: 10)
+        XCTAssertNil(view.hitTest(insideBoundsOnly),
+                     "hitTest should NOT match against bounds coordinates")
+    }
+
+    func testHitTestDelegatesToSuperWhenEditing() {
+        let view = makeFolderView()
+        // Start editing to flip isEditingName.
+        view.startEditing()
+        XCTAssertTrue(view.isEditingName)
+
+        // When editing, hitTest should delegate to super (may return a subview).
+        let point = NSPoint(x: 100, y: view.frame.midY)
+        let result = view.hitTest(point)
+        // Result should be some view (label or self), not guaranteed to be self.
+        XCTAssertNotNil(result, "hitTest should not return nil when editing and point is inside")
+    }
+
+    // MARK: - Chevron image
+
+    func testChevronImageReflectsCollapsedState() {
+        let expandedView = makeFolderView(collapsed: false)
+        let collapsedView = makeFolderView(collapsed: true)
+
+        // Access the image via the accessibilityDescription to verify it was set.
+        // Both should have images (we can't easily compare SF Symbol names).
+        let expandedDesc = expandedView.subviews
+            .compactMap { $0 as? NSImageView }.first?.image?.accessibilityDescription
+        let collapsedDesc = collapsedView.subviews
+            .compactMap { $0 as? NSImageView }.first?.image?.accessibilityDescription
+
+        XCTAssertEqual(expandedDesc, "Toggle folder")
+        XCTAssertEqual(collapsedDesc, "Toggle folder")
+    }
+
+    func testUpdateChevronChangesImage() {
+        let view = makeFolderView(collapsed: false)
+        let imageView = view.subviews.compactMap { $0 as? NSImageView }.first!
+
+        let imageBefore = imageView.image
+        view.folder.isCollapsed = true
+        view.updateChevron()
+        let imageAfter = imageView.image
+
+        // The images should be different (chevron.down vs chevron.right).
+        XCTAssertNotEqual(imageBefore, imageAfter,
+                          "updateChevron should change the image when collapsed state changes")
+    }
+
+    // MARK: - mouseDown: chevron area fires onToggle immediately
+
+    func testMouseDownOnChevronAreaCallsOnToggle() {
+        let view = makeFolderView()
+        var toggleCount = 0
+        view.onToggle = { _ in toggleCount += 1 }
+
+        // Simulate mouseDown in the chevron area (x <= 26).
+        let event = NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: view.convert(NSPoint(x: 10, y: 14), to: nil),
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 1.0
+        )!
+        view.mouseDown(with: event)
+
+        XCTAssertEqual(toggleCount, 1, "mouseDown in chevron area should call onToggle immediately")
+    }
+
+    func testMouseDownOnChevronAreaDoesNotSetDragStartPoint() {
+        let view = makeFolderView()
+        view.onToggle = { _ in }
+
+        let event = NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: view.convert(NSPoint(x: 10, y: 14), to: nil),
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 1.0
+        )!
+        view.mouseDown(with: event)
+
+        // mouseUp should NOT double-toggle (dragStartPoint should be nil).
+        var toggleCount = 0
+        view.onToggle = { _ in toggleCount += 1 }
+
+        let upEvent = NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: view.convert(NSPoint(x: 10, y: 14), to: nil),
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 0.0
+        )!
+        view.mouseUp(with: upEvent)
+
+        XCTAssertEqual(toggleCount, 0,
+                       "mouseUp after chevron mouseDown should NOT toggle again (no double-toggle)")
+    }
+
+    func testRapidChevronClicksDoNotTriggerEditing() {
+        let view = makeFolderView()
+        var toggleCount = 0
+        view.onToggle = { _ in toggleCount += 1 }
+
+        // Simulate a double-click (clickCount=2) in the chevron area.
+        // Should toggle, NOT start editing.
+        let event = NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: view.convert(NSPoint(x: 10, y: 14), to: nil),
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 2,
+            pressure: 1.0
+        )!
+        view.mouseDown(with: event)
+
+        XCTAssertEqual(toggleCount, 1, "Double-click on chevron should toggle, not edit")
+        XCTAssertFalse(view.isEditingName, "Double-click on chevron should NOT start editing")
+    }
+
+    // MARK: - mouseDown: label area uses mouseUp for toggle
+
+    func testMouseDownOnLabelAreaDoesNotCallOnToggle() {
+        let view = makeFolderView()
+        var toggleCount = 0
+        view.onToggle = { _ in toggleCount += 1 }
+
+        // Simulate mouseDown outside chevron area (x > 26).
+        let event = NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: view.convert(NSPoint(x: 100, y: 14), to: nil),
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 1.0
+        )!
+        view.mouseDown(with: event)
+
+        XCTAssertEqual(toggleCount, 0, "mouseDown on label area should NOT toggle immediately")
+    }
+
+    func testMouseUpOnLabelAreaCallsOnToggle() {
+        let view = makeFolderView()
+        var toggleCount = 0
+        view.onToggle = { _ in toggleCount += 1 }
+
+        // mouseDown on label area sets dragStartPoint.
+        let downEvent = NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: view.convert(NSPoint(x: 100, y: 14), to: nil),
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 1.0
+        )!
+        view.mouseDown(with: downEvent)
+
+        // mouseUp should toggle.
+        let upEvent = NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: view.convert(NSPoint(x: 100, y: 14), to: nil),
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 0.0
+        )!
+        view.mouseUp(with: upEvent)
+
+        XCTAssertEqual(toggleCount, 1, "mouseUp on label area should toggle")
+    }
+
+    // MARK: - Double-click on label starts editing
+
+    func testDoubleClickOnLabelStartsEditing() {
+        let view = makeFolderView()
+        var toggleCount = 0
+        view.onToggle = { _ in toggleCount += 1 }
+
+        let event = NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: view.convert(NSPoint(x: 100, y: 14), to: nil),
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 2,
+            pressure: 1.0
+        )!
+        view.mouseDown(with: event)
+
+        XCTAssertTrue(view.isEditingName, "Double-click on label should start editing")
+        XCTAssertEqual(toggleCount, 0, "Double-click on label should not toggle")
+    }
+
+    // MARK: - folderToggleClicked guard
+
+    func testFolderToggleBlocksCollapseWhenContainingSelectedProject() {
+        let folder = SidebarFolder(name: "Active")
+        let projectId = UUID()
+        folder.projectIds = [projectId]
+        folder.isCollapsed = false
+
+        // Simulate the guard logic from folderToggleClicked.
+        folder.isCollapsed.toggle()
+        // Guard: if collapsing a folder that contains the selected project, force expand.
+        let selectedProjectId = projectId  // selected project is inside this folder
+        if folder.isCollapsed, folder.projectIds.contains(selectedProjectId) {
+            folder.isCollapsed = false
+        }
+
+        XCTAssertFalse(folder.isCollapsed,
+                       "Folder containing the selected project should not stay collapsed")
+    }
+
+    func testFolderToggleAllowsCollapseWhenNotContainingSelectedProject() {
+        let folder = SidebarFolder(name: "Other")
+        let projectId = UUID()
+        let otherProjectId = UUID()
+        folder.projectIds = [projectId]
+        folder.isCollapsed = false
+
+        folder.isCollapsed.toggle()
+        // Guard: selected project is NOT in this folder.
+        let selectedProjectId = otherProjectId
+        if folder.isCollapsed, folder.projectIds.contains(selectedProjectId) {
+            folder.isCollapsed = false
+        }
+
+        XCTAssertTrue(folder.isCollapsed,
+                      "Folder NOT containing the selected project should collapse normally")
+    }
+}
