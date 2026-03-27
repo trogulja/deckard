@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.1](https://github.com/gi11es/deckard/compare/v0.13.0...v0.13.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* detect activity for setuid-root foreground processes (top, sudo) ([7ac3509](https://github.com/gi11es/deckard/commit/7ac3509a3001bbe6fc81b19d28c87e18afc36c14))
+* filter download badge to count only DMG downloads ([c544196](https://github.com/gi11es/deckard/commit/c5441964c726175785165ee82acbb92b74f254f9))
+
 ## [0.13.0](https://github.com/gi11es/deckard/compare/v0.12.0...v0.13.0) (2026-03-26)
 
 
