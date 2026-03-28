@@ -236,7 +236,9 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
         terminalView.send(txt: text)
     }
 
-    /// Terminate the shell process and kill its tmux session.
+    /// Terminate the shell process.
+    /// When closing a tab, also kill the tmux session so it doesn't orphan.
+    /// On app quit, call `detach()` instead to keep the session alive.
     func terminate() {
         guard !processExited else { return }
         processExited = true
@@ -244,18 +246,12 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
         killTmuxSession()
     }
 
-    /// Kill the Deckard-specific tmux server.
-    /// Call on app quit so the next launch gets a fresh server whose process
-    /// inherits Deckard's current TCC permissions (Full Disk Access, etc.).
-    static func killTmuxServer() {
-        guard let path = tmuxPath else { return }
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: path)
-        task.arguments = ["-L", tmuxSocket, "kill-server"]
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-        try? task.run()
-        task.waitUntilExit()
+    /// Detach from the tmux session without killing it (for app quit).
+    func detach() {
+        guard !processExited else { return }
+        processExited = true
+        // Just kill the local process — tmux session survives
+        terminalView.process?.terminate()
     }
 
     /// Whether the surface can be restarted (rate-limited to prevent crash loops).
