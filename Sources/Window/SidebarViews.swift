@@ -4,7 +4,7 @@ import AppKit
 
 class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
     var title: String {
-        didSet { label.stringValue = title }
+        didSet { updateLabelText() }
     }
     var isSelected: Bool = false {
         didSet { needsDisplay = true }
@@ -20,32 +20,42 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
     let index: Int
     private let label: NSTextField
     private let badgeContainer: NSStackView
-    private let shortcutLabel: NSTextField
     private weak var target: AnyObject?
     private let action: Selector
     private var dragStartPoint: NSPoint?
     private var leadingConstraint: NSLayoutConstraint?
+    private var isBold: Bool
 
     /// Leading indent (used for projects inside folders).
     var indent: CGFloat = 0 {
         didSet { leadingConstraint?.constant = 8 + indent }
     }
 
-    /// Show or hide a keyboard shortcut number to the left of the name.
+    /// Show or hide a keyboard shortcut number after the name.
     var shortcutBadge: String? {
-        didSet {
-            if let badge = shortcutBadge {
-                shortcutLabel.stringValue = badge
-                shortcutLabel.isHidden = false
-            } else {
-                shortcutLabel.isHidden = true
-            }
+        didSet { updateLabelText() }
+    }
+
+    private func updateLabelText() {
+        if let badge = shortcutBadge {
+            let str = NSMutableAttributedString(string: title, attributes: [
+                .font: isBold ? NSFont.boldSystemFont(ofSize: 12) : NSFont.systemFont(ofSize: 12),
+                .foregroundColor: ThemeManager.shared.currentColors.primaryText,
+            ])
+            str.append(NSAttributedString(string: " \(badge)", attributes: [
+                .font: NSFont.systemFont(ofSize: 10),
+                .foregroundColor: NSColor.white,
+            ]))
+            label.attributedStringValue = str
+        } else {
+            label.stringValue = title
         }
     }
 
     init(title: String, bold: Bool, index: Int, target: AnyObject, action: Selector) {
         self.title = title
         self.index = index
+        self.isBold = bold
         self.target = target
         self.action = action
 
@@ -60,13 +70,6 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         badgeContainer.spacing = 3
         badgeContainer.setContentHuggingPriority(.required, for: .horizontal)
 
-        shortcutLabel = NSTextField(labelWithString: "")
-        shortcutLabel.font = .systemFont(ofSize: 10)
-        shortcutLabel.textColor = .white
-        shortcutLabel.isHidden = true
-        shortcutLabel.setContentHuggingPriority(.required, for: .horizontal)
-        shortcutLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -74,10 +77,8 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         label.translatesAutoresizingMaskIntoConstraints = false
         label.toolTip = shortcutTooltip("Close Folder", for: .closeFolder)
         badgeContainer.translatesAutoresizingMaskIntoConstraints = false
-        shortcutLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
         addSubview(badgeContainer)
-        addSubview(shortcutLabel) // on top so it overlays
 
         let lc = label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8)
         self.leadingConstraint = lc
@@ -89,8 +90,6 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
             label.trailingAnchor.constraint(lessThanOrEqualTo: badgeContainer.leadingAnchor, constant: -4),
             badgeContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             badgeContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
-            shortcutLabel.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 3),
-            shortcutLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
 
