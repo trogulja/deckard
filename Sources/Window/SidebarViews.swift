@@ -86,9 +86,9 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
             heightAnchor.constraint(equalToConstant: 28),
             lc,
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: shortcutLabel.leadingAnchor, constant: -4),
-            shortcutLabel.trailingAnchor.constraint(equalTo: badgeContainer.leadingAnchor, constant: -4),
+            shortcutLabel.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 4),
             shortcutLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: badgeContainer.leadingAnchor, constant: -4),
             badgeContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             badgeContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
