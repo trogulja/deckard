@@ -37,10 +37,8 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
             if let badge = shortcutBadge {
                 shortcutLabel.stringValue = badge
                 shortcutLabel.isHidden = false
-                leadingConstraint?.constant = 18 + indent
             } else {
                 shortcutLabel.isHidden = true
-                leadingConstraint?.constant = 8 + indent
             }
         }
     }
@@ -63,7 +61,7 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         badgeContainer.setContentHuggingPriority(.required, for: .horizontal)
 
         shortcutLabel = NSTextField(labelWithString: "")
-        shortcutLabel.font = .systemFont(ofSize: 12)
+        shortcutLabel.font = .systemFont(ofSize: 10)
         shortcutLabel.textColor = .white
         shortcutLabel.isHidden = true
         shortcutLabel.setContentHuggingPriority(.required, for: .horizontal)
@@ -77,22 +75,22 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         label.toolTip = shortcutTooltip("Close Folder", for: .closeFolder)
         badgeContainer.translatesAutoresizingMaskIntoConstraints = false
         shortcutLabel.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(shortcutLabel)
         addSubview(label)
         addSubview(badgeContainer)
+        addSubview(shortcutLabel) // on top so it overlays
 
         let lc = label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8)
         self.leadingConstraint = lc
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 28),
-            shortcutLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            shortcutLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             lc,
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.trailingAnchor.constraint(lessThanOrEqualTo: badgeContainer.leadingAnchor, constant: -4),
             badgeContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             badgeContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
+            shortcutLabel.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 3),
+            shortcutLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
 
