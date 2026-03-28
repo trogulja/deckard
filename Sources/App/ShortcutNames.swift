@@ -8,6 +8,8 @@ extension KeyboardShortcuts.Name {
     static let closeFolder = Self("closeFolder", default: .init(.w, modifiers: [.command, .shift]))
     static let nextTab = Self("nextTab", default: .init(.rightBracket, modifiers: [.command, .shift]))
     static let previousTab = Self("previousTab", default: .init(.leftBracket, modifiers: [.command, .shift]))
+    static let nextProject = Self("nextProject", default: .init(.rightBracket, modifiers: [.command, .option]))
+    static let previousProject = Self("previousProject", default: .init(.leftBracket, modifiers: [.command, .option]))
     static let toggleSidebar = Self("toggleSidebar", default: .init(.s, modifiers: [.command, .control]))
     static let settings = Self("settings", default: .init(.comma, modifiers: .command))
     static let tab1 = Self("tab1", default: .init(.one, modifiers: .command))
@@ -35,6 +37,8 @@ let configurableShortcuts: [ShortcutEntry] = [
     ShortcutEntry(name: .closeFolder, label: "Close Folder"),
     ShortcutEntry(name: .nextTab, label: "Next Tab"),
     ShortcutEntry(name: .previousTab, label: "Previous Tab"),
+    ShortcutEntry(name: .nextProject, label: "Next Project"),
+    ShortcutEntry(name: .previousProject, label: "Previous Project"),
     ShortcutEntry(name: .toggleSidebar, label: "Toggle Sidebar"),
     ShortcutEntry(name: .settings, label: "Settings"),
     ShortcutEntry(name: .tab1, label: "Tab 1"),
