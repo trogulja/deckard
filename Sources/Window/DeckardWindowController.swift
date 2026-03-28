@@ -1307,8 +1307,21 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     }
 
     func selectProject(byNumber n: Int) {
-        if n >= 0, n < projects.count {
-            selectProject(at: n)
+        // Resolve the Nth project in sidebar (visual) order, not array order.
+        var count = 0
+        for item in sidebarOrder {
+            let ids: [UUID]
+            switch item {
+            case .project(let id): ids = [id]
+            case .folder(let folder): ids = folder.projectIds
+            }
+            for id in ids {
+                if count == n, let index = projects.firstIndex(where: { $0.id == id }) {
+                    selectProject(at: index)
+                    return
+                }
+                count += 1
+            }
         }
     }
 }
