@@ -907,7 +907,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSTextFie
         // Pin column widths so they never shift
         grid.column(at: 0).width = 140
         grid.column(at: 1).width = 100
-        grid.column(at: 2).width = 60
+        grid.column(at: 2).width = 120
         grid.column(at: 3).width = 100
 
         // Build right-column entries: reveal toggle first, then the project shortcuts
