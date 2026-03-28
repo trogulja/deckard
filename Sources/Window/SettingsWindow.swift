@@ -931,36 +931,31 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSTextFie
             }
         }
 
+        // Reveal project numbers row — a modifier-only "shortcut" with clear/restore
+        let revealLabel = NSTextField(labelWithString: "Reveal Numbers")
+        revealLabel.alignment = .right
+        let revealToggle = RevealShortcutView(target: self)
+        grid.addRow(with: [revealLabel, revealToggle, NSView(), NSView()])
+
         // Reset button spanning the right side
         let resetButton = NSButton(title: "Reset All to Defaults", target: self, action: #selector(resetShortcuts))
         resetButton.bezelStyle = .rounded
         grid.addRow(with: [NSView(), NSView(), NSView(), resetButton])
 
-        let revealCheck = NSButton(checkboxWithTitle: "Show project numbers while holding ⌘",
-                                    target: self, action: #selector(toggleRevealProjectNumbers(_:)))
-        revealCheck.state = UserDefaults.standard.object(forKey: "revealProjectNumbers") as? Bool ?? true ? .on : .off
-
         pane.addSubview(grid)
-        pane.addSubview(revealCheck)
         NSLayoutConstraint.activate([
             grid.topAnchor.constraint(equalTo: pane.topAnchor, constant: 20),
             grid.centerXAnchor.constraint(equalTo: pane.centerXAnchor),
-            revealCheck.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 16),
-            revealCheck.leadingAnchor.constraint(equalTo: grid.leadingAnchor),
         ])
-        revealCheck.translatesAutoresizingMaskIntoConstraints = false
 
         return pane
-    }
-
-    @objc private func toggleRevealProjectNumbers(_ sender: NSButton) {
-        UserDefaults.standard.set(sender.state == .on, forKey: "revealProjectNumbers")
     }
 
     @objc private func resetShortcuts() {
         for entry in configurableShortcuts {
             KeyboardShortcuts.reset(entry.name)
         }
+        UserDefaults.standard.removeObject(forKey: "revealProjectNumbers")
         // Rebuild the pane to reflect reset values
         switchToPane(.shortcuts)
     }
@@ -1035,3 +1030,82 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSTextFie
 
 
 private var settingsKeyAssoc: UInt8 = 0
+
+// MARK: - Reveal Shortcut Toggle
+
+/// A small view that looks like a shortcut recorder but toggles a bare-modifier "⌘" shortcut.
+/// Clicking the X clears it; clicking the value area restores "⌘".
+private class RevealShortcutView: NSView {
+    private let valueLabel: NSTextField
+    private let clearButton: NSButton
+    private var enabled: Bool
+
+    init(target: AnyObject) {
+        enabled = UserDefaults.standard.object(forKey: "revealProjectNumbers") as? Bool ?? true
+        valueLabel = NSTextField(labelWithString: "")
+        clearButton = NSButton(title: "✕", target: nil, action: nil)
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 4
+        layer?.borderWidth = 0.5
+
+        valueLabel.font = .systemFont(ofSize: 12)
+        valueLabel.alignment = .center
+        valueLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        clearButton.bezelStyle = .inline
+        clearButton.isBordered = false
+        clearButton.font = .systemFont(ofSize: 9)
+        clearButton.translatesAutoresizingMaskIntoConstraints = false
+        clearButton.target = self
+        clearButton.action = #selector(clearClicked)
+
+        addSubview(valueLabel)
+        addSubview(clearButton)
+
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: 90),
+            heightAnchor.constraint(equalToConstant: 22),
+            valueLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            valueLabel.trailingAnchor.constraint(equalTo: clearButton.leadingAnchor, constant: -2),
+            valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            clearButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            clearButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            clearButton.widthAnchor.constraint(equalToConstant: 16),
+        ])
+
+        let click = NSClickGestureRecognizer(target: self, action: #selector(valueClicked))
+        valueLabel.addGestureRecognizer(click)
+
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func clearClicked() {
+        enabled = false
+        UserDefaults.standard.set(false, forKey: "revealProjectNumbers")
+        updateAppearance()
+    }
+
+    @objc private func valueClicked() {
+        enabled = true
+        UserDefaults.standard.set(true, forKey: "revealProjectNumbers")
+        updateAppearance()
+    }
+
+    private func updateAppearance() {
+        if enabled {
+            valueLabel.stringValue = "⌘"
+            valueLabel.textColor = .labelColor
+            clearButton.isHidden = false
+            layer?.borderColor = NSColor.separatorColor.cgColor
+        } else {
+            valueLabel.stringValue = "—"
+            valueLabel.textColor = .tertiaryLabelColor
+            clearButton.isHidden = true
+            layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.3).cgColor
+        }
+    }
+}
