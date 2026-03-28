@@ -324,6 +324,77 @@ final class DeckardHooksInstallerTests: XCTestCase {
         XCTAssertNotNil(restoredSettings["allowedTools"])
     }
 
+    // MARK: - Round-trip with cc-statusline config
+
+    func testRoundTripPreservesCcStatusLineConfig() throws {
+        let tempDir = NSTemporaryDirectory() + "deckard-hooks-test-\(UUID().uuidString)/"
+        let hooksDir = tempDir + "hooks/"
+        try FileManager.default.createDirectory(atPath: hooksDir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(atPath: tempDir) }
+
+        let settingsPath = tempDir + "settings.json"
+        let originalSavePath = tempDir + "original-statusline.json"
+
+        // Simulate cc-statusline's real configuration (relative path + padding field)
+        let initial: [String: Any] = [
+            "allowedTools": ["Read", "Write"],
+            "statusLine": [
+                "type": "command",
+                "command": ".claude/statusline.sh",
+                "padding": 0,
+            ] as [String: Any],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: initial, options: .prettyPrinted)
+        try data.write(to: URL(fileURLWithPath: settingsPath))
+
+        // Step 1: Deckard install — should save original and overwrite
+        DeckardHooksInstaller.mergeHooksIntoSettings(
+            settingsPath: settingsPath,
+            originalStatusLinePath: originalSavePath
+        )
+
+        // Verify original was saved with ALL fields (including padding)
+        let savedData = try Data(contentsOf: URL(fileURLWithPath: originalSavePath))
+        let saved = try JSONSerialization.jsonObject(with: savedData) as! [String: Any]
+        XCTAssertEqual(saved["command"] as? String, ".claude/statusline.sh")
+        XCTAssertEqual(saved["type"] as? String, "command")
+        XCTAssertEqual(saved["padding"] as? Int, 0, "Extra fields like padding must be preserved")
+
+        // Verify settings now point to Deckard's script
+        let afterInstall = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: URL(fileURLWithPath: settingsPath))) as! [String: Any]
+        let installedStatusLine = afterInstall["statusLine"] as! [String: Any]
+        XCTAssertTrue((installedStatusLine["command"] as! String).contains(".deckard/hooks/"))
+
+        // Step 2: Deckard install again — should NOT overwrite saved original
+        DeckardHooksInstaller.mergeHooksIntoSettings(
+            settingsPath: settingsPath,
+            originalStatusLinePath: originalSavePath
+        )
+        let savedAgain = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: URL(fileURLWithPath: originalSavePath))) as! [String: Any]
+        XCTAssertEqual(savedAgain["command"] as? String, ".claude/statusline.sh",
+                       "Re-running install must not overwrite the saved original")
+
+        // Step 3: Uninstall — should restore cc-statusline config exactly
+        DeckardHooksInstaller.uninstall(
+            settingsPath: settingsPath,
+            originalStatusLinePath: originalSavePath,
+            hooksDirPath: hooksDir
+        )
+
+        let restored = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: URL(fileURLWithPath: settingsPath))) as! [String: Any]
+        let restoredStatusLine = restored["statusLine"] as! [String: Any]
+        XCTAssertEqual(restoredStatusLine["command"] as? String, ".claude/statusline.sh")
+        XCTAssertEqual(restoredStatusLine["type"] as? String, "command")
+        XCTAssertEqual(restoredStatusLine["padding"] as? Int, 0,
+                       "Restored config must include all original fields like padding")
+
+        // Other settings untouched
+        XCTAssertNotNil(restored["allowedTools"])
+    }
+
     // MARK: - Script content markers
 
     func testHookScriptExpectedMarkers() {
