@@ -166,6 +166,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     var terminalActivity: [UUID: ProcessMonitor.ActivityInfo] = [:]
     /// Consecutive active poll count per surface — require 2 before showing as active.
     private var terminalActiveStreak: [UUID: Int] = [:]
+    private var flagsMonitor: Any?
 
     init() {
         let window = NSWindow(
@@ -217,6 +218,13 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
 
         restoreOrCreateInitial()
 
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            let mods = revealNumbersModifiers()
+            let active = !mods.isEmpty && event.modifierFlags.contains(mods)
+            self?.updateShortcutIndicators(commandHeld: active)
+            return event
+        }
+
         // If no projects after restore, auto-show the project picker
         if projects.isEmpty {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -237,6 +245,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     required init?(coder: NSCoder) { fatalError() }
 
     deinit {
+        if let monitor = flagsMonitor { NSEvent.removeMonitor(monitor) }
         SessionManager.shared.stopAutosave()
         processMonitorTimer?.invalidate()
     }
@@ -1296,19 +1305,52 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
 
     // MARK: - Navigation
 
+    /// Project indices matching visible sidebar rows (skips collapsed folders).
+    func projectIndicesInSidebarOrder() -> [Int] {
+        var indices: [Int] = []
+        for item in sidebarOrder {
+            switch item {
+            case .project(let id):
+                if let i = projects.firstIndex(where: { $0.id == id }) { indices.append(i) }
+            case .folder(let folder):
+                guard !folder.isCollapsed else { continue }
+                for id in folder.projectIds {
+                    if let i = projects.firstIndex(where: { $0.id == id }) { indices.append(i) }
+                }
+            }
+        }
+        return indices
+    }
+
     func selectNextProject() {
-        guard !projects.isEmpty else { return }
-        selectProject(at: (selectedProjectIndex + 1) % projects.count)
+        let ordered = projectIndicesInSidebarOrder()
+        guard !ordered.isEmpty else { return }
+        let cur = ordered.firstIndex(of: selectedProjectIndex) ?? -1
+        selectProject(at: ordered[(cur + 1) % ordered.count])
     }
 
     func selectPrevProject() {
-        guard !projects.isEmpty else { return }
-        selectProject(at: (selectedProjectIndex - 1 + projects.count) % projects.count)
+        let ordered = projectIndicesInSidebarOrder()
+        guard !ordered.isEmpty else { return }
+        let cur = ordered.firstIndex(of: selectedProjectIndex) ?? ordered.count
+        selectProject(at: ordered[(cur - 1 + ordered.count) % ordered.count])
     }
 
     func selectProject(byNumber n: Int) {
-        if n >= 0, n < projects.count {
-            selectProject(at: n)
+        let ordered = projectIndicesInSidebarOrder()
+        guard n >= 0, n < ordered.count else { return }
+        selectProject(at: ordered[n])
+    }
+
+    func updateShortcutIndicators(commandHeld: Bool) {
+        let ordered = commandHeld ? projectIndicesInSidebarOrder() : []
+        for view in sidebarStackView.arrangedSubviews {
+            guard let row = view as? VerticalTabRowView else { continue }
+            if let pos = ordered.firstIndex(of: row.index), pos < 10 {
+                row.shortcutBadge = "\((pos + 1) % 10)"
+            } else {
+                row.shortcutBadge = nil
+            }
         }
     }
 }

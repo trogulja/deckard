@@ -907,27 +907,46 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSTextFie
         // Pin column widths so they never shift
         grid.column(at: 0).width = 140
         grid.column(at: 1).width = 100
-        grid.column(at: 2).width = 60
+        grid.column(at: 2).width = 120
         grid.column(at: 3).width = 100
 
-        // Lay out entries in two columns
+        // Build right-column entries: reveal toggle first, then the project shortcuts
+        let revealLabel = NSTextField(labelWithString: "Show Numbers")
+        revealLabel.alignment = .right
+        let revealToggle = RevealShortcutView()
+
+        struct RightEntry {
+            let label: NSView
+            let control: NSView
+        }
+        var rightEntries: [RightEntry] = [RightEntry(label: revealLabel, control: revealToggle)]
         let entries = configurableShortcuts
-        let rows = (entries.count + 1) / 2
-        for row in 0..<rows {
-            let leftIdx = row
-            let rightIdx = row + rows
+        let leftCount = entries.count / 2 + entries.count % 2
+        for i in leftCount..<entries.count {
+            let l = NSTextField(labelWithString: entries[i].label)
+            l.alignment = .right
+            rightEntries.append(RightEntry(label: l, control: KeyboardShortcuts.RecorderCocoa(for: entries[i].name)))
+        }
 
-            let leftLabel = NSTextField(labelWithString: entries[leftIdx].label)
-            leftLabel.alignment = .right
-            let leftRecorder = KeyboardShortcuts.RecorderCocoa(for: entries[leftIdx].name)
-
-            if rightIdx < entries.count {
-                let rightLabel = NSTextField(labelWithString: entries[rightIdx].label)
-                rightLabel.alignment = .right
-                let rightRecorder = KeyboardShortcuts.RecorderCocoa(for: entries[rightIdx].name)
-                grid.addRow(with: [leftLabel, leftRecorder, rightLabel, rightRecorder])
+        // Lay out in two columns, pairing left entries with right entries
+        let rowCount = max(leftCount, rightEntries.count)
+        for row in 0..<rowCount {
+            let leftLabel: NSView
+            let leftControl: NSView
+            if row < leftCount {
+                let l = NSTextField(labelWithString: entries[row].label)
+                l.alignment = .right
+                leftLabel = l
+                leftControl = KeyboardShortcuts.RecorderCocoa(for: entries[row].name)
             } else {
-                grid.addRow(with: [leftLabel, leftRecorder, NSView(), NSView()])
+                leftLabel = NSView()
+                leftControl = NSView()
+            }
+
+            if row < rightEntries.count {
+                grid.addRow(with: [leftLabel, leftControl, rightEntries[row].label, rightEntries[row].control])
+            } else {
+                grid.addRow(with: [leftLabel, leftControl, NSView(), NSView()])
             }
         }
 
@@ -949,6 +968,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSTextFie
         for entry in configurableShortcuts {
             KeyboardShortcuts.reset(entry.name)
         }
+        UserDefaults.standard.removeObject(forKey: revealModifiersKey)
         // Rebuild the pane to reflect reset values
         switchToPane(.shortcuts)
     }
@@ -1023,3 +1043,113 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSTextFie
 
 
 private var settingsKeyAssoc: UInt8 = 0
+
+// MARK: - Reveal Shortcut Toggle
+
+/// Modifier-key recorder styled like KeyboardShortcuts.RecorderCocoa.
+/// Captures bare modifier combinations (⌘, ⌘⇧, ⌥, etc.) for the reveal-numbers feature.
+private let revealModifiersKey = "revealProjectNumbersModifiers"
+private let revealDefaultModifiers: NSEvent.ModifierFlags = .command
+
+/// Returns the configured modifier flags for the reveal-numbers feature.
+/// Defaults to .command. Returns [] if the user cleared the setting.
+func revealNumbersModifiers() -> NSEvent.ModifierFlags {
+    if let raw = UserDefaults.standard.object(forKey: revealModifiersKey) as? UInt {
+        return NSEvent.ModifierFlags(rawValue: raw)
+    }
+    return revealDefaultModifiers
+}
+
+private class RevealShortcutView: NSSearchField, NSSearchFieldDelegate {
+    private let minimumWidth = 130.0
+    private var cancelButtonCell: NSButtonCell?
+    private var isRecording = false
+    private var monitor: Any?
+
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: 130, height: 24))
+        self.delegate = self
+        self.placeholderString = "Record Shortcut"
+        self.alignment = .center
+        (cell as? NSSearchFieldCell)?.searchButtonCell = nil
+        self.wantsLayer = true
+        setContentHuggingPriority(.defaultHigh, for: .vertical)
+        setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        self.cancelButtonCell = (cell as? NSSearchFieldCell)?.cancelButtonCell
+        refreshDisplay()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var intrinsicContentSize: CGSize {
+        var size = super.intrinsicContentSize
+        size.width = minimumWidth
+        return size
+    }
+
+    private func refreshDisplay() {
+        let mods = revealNumbersModifiers()
+        stringValue = mods.isEmpty ? "" : Self.symbolString(for: mods)
+        (cell as? NSSearchFieldCell)?.cancelButtonCell = stringValue.isEmpty ? nil : cancelButtonCell
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        if stringValue.isEmpty {
+            UserDefaults.standard.set(UInt(0), forKey: revealModifiersKey)
+        }
+        (cell as? NSSearchFieldCell)?.cancelButtonCell = stringValue.isEmpty ? nil : cancelButtonCell
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        guard window != nil else { return false }
+        let ok = super.becomeFirstResponder()
+        guard ok else { return false }
+        isRecording = true
+        placeholderString = "Press modifier…"
+        stringValue = ""
+        (cell as? NSSearchFieldCell)?.cancelButtonCell = cancelButtonCell
+
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            guard let self, self.isRecording else { return event }
+            let mods = event.modifierFlags.intersection([.command, .shift, .option, .control])
+            if !mods.isEmpty {
+                UserDefaults.standard.set(mods.rawValue, forKey: revealModifiersKey)
+                self.endRecording()
+            }
+            return event
+        }
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        endRecording()
+        return super.resignFirstResponder()
+    }
+
+    private func endRecording() {
+        isRecording = false
+        if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+        placeholderString = "Record Shortcut"
+        refreshDisplay()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if revealNumbersModifiers().isEmpty {
+            // Restore default on click when cleared
+            UserDefaults.standard.set(revealDefaultModifiers.rawValue, forKey: revealModifiersKey)
+            refreshDisplay()
+        } else {
+            super.mouseDown(with: event)
+        }
+    }
+
+    static func symbolString(for flags: NSEvent.ModifierFlags) -> String {
+        var s = ""
+        if flags.contains(.control) { s += "⌃" }
+        if flags.contains(.option) { s += "⌥" }
+        if flags.contains(.shift) { s += "⇧" }
+        if flags.contains(.command) { s += "⌘" }
+        return s
+    }
+}

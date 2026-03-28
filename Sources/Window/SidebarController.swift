@@ -61,6 +61,16 @@ extension DeckardWindowController {
         sidebarStackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         ensureSidebarOrder()
 
+        // Check current modifier state to pre-set shortcut indicators on new rows
+        let revealMods = revealNumbersModifiers()
+        let cmdHeld = !revealMods.isEmpty && NSEvent.modifierFlags.contains(revealMods)
+        var shortcutForProjectIndex: [Int: String] = [:]
+        if cmdHeld {
+            for (pos, pi) in projectIndicesInSidebarOrder().prefix(10).enumerated() {
+                shortcutForProjectIndex[pi] = "\((pos + 1) % 10)"
+            }
+        }
+
         // Map from arranged-subview index to flat project index (for selection highlight).
         // Also used for drag-drop: we store a "sidebar row index" in the pasteboard.
         var sidebarRowToProjectIndex: [Int: Int] = [:]
@@ -73,6 +83,7 @@ extension DeckardWindowController {
                 let pi = projectIndex(forId: projectId)
                 let row = VerticalTabRowView(title: project.name, bold: false, index: pi,
                                      target: self, action: #selector(projectRowClicked(_:)))
+                row.shortcutBadge = shortcutForProjectIndex[pi]
                 row.badgeInfos = project.tabs.filter { $0.badgeState != .none }.map { tab in
                     (state: tab.badgeState, name: tab.name, activity: self.terminalActivity[tab.id])
                 }
@@ -147,6 +158,7 @@ extension DeckardWindowController {
                         let row = VerticalTabRowView(title: project.name, bold: false, index: pi,
                                              target: self, action: #selector(projectRowClicked(_:)))
                         row.indent = 16
+                        row.shortcutBadge = shortcutForProjectIndex[pi]
                         row.badgeInfos = project.tabs.filter { $0.badgeState != .none }.map { tab in
                             (state: tab.badgeState, name: tab.name, activity: self.terminalActivity[tab.id])
                         }

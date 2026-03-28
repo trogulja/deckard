@@ -181,13 +181,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let prevTabItem = NSMenuItem(title: "Previous Tab", action: #selector(selectPrevTab), keyEquivalent: "")
         prevTabItem.setShortcut(for: .previousTab)
         fileMenu.addItem(prevTabItem)
+
+        let nextProjectItem = NSMenuItem(title: "Next Project", action: #selector(selectNextProject), keyEquivalent: "")
+        nextProjectItem.setShortcut(for: .nextProject)
+        fileMenu.addItem(nextProjectItem)
+
+        let prevProjectItem = NSMenuItem(title: "Previous Project", action: #selector(selectPrevProject), keyEquivalent: "")
+        prevProjectItem.setShortcut(for: .previousProject)
+        fileMenu.addItem(prevProjectItem)
         fileMenu.addItem(.separator())
 
-        // Cmd+1-9 for direct tab access
-        for i in 1...9 {
-            let item = NSMenuItem(title: "Tab \(i)", action: #selector(selectTabByNumber(_:)), keyEquivalent: "")
-            item.tag = i - 1
-            item.setShortcut(for: tabShortcutNames[i - 1])
+        // Cmd+1-9, Cmd+0 for direct project access
+        for i in 0..<tabShortcutNames.count {
+            let displayNum = i + 1
+            let item = NSMenuItem(title: "Project \(displayNum)", action: #selector(selectTabByNumber(_:)), keyEquivalent: "")
+            item.tag = i
+            item.setShortcut(for: tabShortcutNames[i])
             fileMenu.addItem(item)
         }
 
@@ -272,6 +281,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func selectPrevTab() {
         windowController?.selectPrevTab()
+    }
+
+    @objc private func selectNextProject() {
+        windowController?.selectNextProject()
+    }
+
+    @objc private func selectPrevProject() {
+        windowController?.selectPrevProject()
     }
 
     @objc private func selectTabByNumber(_ sender: NSMenuItem) {
