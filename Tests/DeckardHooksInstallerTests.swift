@@ -203,6 +203,27 @@ final class DeckardHooksInstallerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: originalSavePath))
     }
 
+    // MARK: - StatusLine script delegation
+
+    func testStatusLineScriptDelegatesToOriginal() throws {
+        // Verify the statusLine script contains the delegation marker
+        // We test this by checking the installed script file content
+        let tempDir = NSTemporaryDirectory() + "deckard-hooks-test-\(UUID().uuidString)/"
+        let hooksDir = tempDir + "hooks/"
+        try FileManager.default.createDirectory(atPath: hooksDir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(atPath: tempDir) }
+
+        let scriptPath = hooksDir + "statusline.sh"
+        DeckardHooksInstaller.installHookScript(
+            hookScriptPath: scriptPath,
+            statusLineScriptPath: scriptPath  // reuse path, we just need to check content
+        )
+
+        let content = try String(contentsOfFile: scriptPath, encoding: .utf8)
+        XCTAssertTrue(content.contains("original-statusline.json"), "Script should reference original statusline config")
+        XCTAssertTrue(content.contains("ORIG_CMD"), "Script should extract and run original command")
+    }
+
     // MARK: - Script content markers
 
     func testHookScriptExpectedMarkers() {

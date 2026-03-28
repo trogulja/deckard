@@ -40,13 +40,20 @@ enum DeckardHooksInstaller {
         """
 
     /// StatusLine script — receives the full /status JSON on stdin (which includes
-    /// rate_limits), extracts the quota data, and sends it to Deckard's control socket.
-    /// Its stdout is ignored (empty) so it doesn't affect Claude Code's status line.
+    /// rate_limits), extracts the quota data, sends it to Deckard's control socket,
+    /// then delegates to the user's original statusline command (if any).
     private static let statusLineScript = """
         #!/bin/sh
-        [ -z "$DECKARD_SOCKET_PATH" ] && exit 0
-        _PY=$(mktemp)
-        cat > "$_PY" << 'PYEOF'
+        # Deckard statusline wrapper — extracts quota data for Deckard,
+        # then delegates to the user's original statusline command (if any).
+
+        # Read stdin into a variable (the /status JSON from Claude Code)
+        INPUT=$(cat)
+
+        # --- Deckard quota extraction (silent no-op if Deckard isn't running) ---
+        if [ -n "$DECKARD_SOCKET_PATH" ]; then
+            _PY=$(mktemp)
+            cat > "$_PY" << 'PYEOF'
         import json,sys,socket,os
         try:
             d=json.loads(sys.stdin.read());rl=d.get("rate_limits",{})
@@ -67,8 +74,19 @@ enum DeckardHooksInstaller {
             sock.close()
         except:pass
         PYEOF
-        python3 "$_PY"
-        rm -f "$_PY"
+            printf '%s' "$INPUT" | python3 "$_PY"
+            rm -f "$_PY"
+        fi
+
+        # --- Delegate to user's original statusline (if saved) ---
+        ORIG_CFG="$HOME/.deckard/original-statusline.json"
+        if [ -f "$ORIG_CFG" ]; then
+            ORIG_CMD=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('command',''))" "$ORIG_CFG" 2>/dev/null)
+            if [ -n "$ORIG_CMD" ]; then
+                printf '%s' "$INPUT" | eval "$ORIG_CMD"
+                exit $?
+            fi
+        fi
         """
 
     private static let hookScriptPath: String = {
@@ -103,12 +121,24 @@ enum DeckardHooksInstaller {
         mergeHooksIntoSettings()
     }
 
-    private static func installHookScript() {
-        let dir = (hookScriptPath as NSString).deletingLastPathComponent
+    static func installHookScript(
+        hookScriptPath: String? = nil,
+        statusLineScriptPath: String? = nil
+    ) {
+        let effectiveHookPath = hookScriptPath ?? Self.hookScriptPath
+        let effectiveStatusLinePath = statusLineScriptPath ?? Self.statusLineScriptPath
+
+        let dir = (effectiveHookPath as NSString).deletingLastPathComponent
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
 
+        // Also ensure statusline script dir exists (may differ from hook dir)
+        let statusLineDir = (effectiveStatusLinePath as NSString).deletingLastPathComponent
+        if statusLineDir != dir {
+            try? FileManager.default.createDirectory(atPath: statusLineDir, withIntermediateDirectories: true)
+        }
+
         // Always overwrite to keep the scripts up to date.
-        for (script, path) in [(hookScript, hookScriptPath), (statusLineScript, statusLineScriptPath)] {
+        for (script, path) in [(hookScript, effectiveHookPath), (statusLineScript, effectiveStatusLinePath)] {
             try? script.write(toFile: path, atomically: true, encoding: .utf8)
             try? FileManager.default.setAttributes(
                 [.posixPermissions: 0o755], ofItemAtPath: path)
