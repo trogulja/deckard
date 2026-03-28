@@ -1345,8 +1345,8 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         let ordered = commandHeld ? projectIndicesInSidebarOrder() : []
         for view in sidebarStackView.arrangedSubviews {
             guard let row = view as? VerticalTabRowView else { continue }
-            if let pos = ordered.firstIndex(of: row.index), pos < 9 {
-                row.shortcutNumber = pos + 1
+            if let pos = ordered.firstIndex(of: row.index), pos < 10 {
+                row.shortcutNumber = (pos + 1) % 10
             } else {
                 row.shortcutNumber = nil
             }

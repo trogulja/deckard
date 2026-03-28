@@ -932,7 +932,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSTextFie
         }
 
         // Reveal project numbers row — a modifier-only "shortcut" with clear/restore
-        let revealLabel = NSTextField(labelWithString: "Reveal Numbers")
+        let revealLabel = NSTextField(labelWithString: "Show Project Numbers")
         revealLabel.alignment = .right
         let revealToggle = RevealShortcutView(target: self)
         grid.addRow(with: [revealLabel, revealToggle, NSView(), NSView()])
@@ -1033,8 +1033,8 @@ private var settingsKeyAssoc: UInt8 = 0
 
 // MARK: - Reveal Shortcut Toggle
 
-/// A small view that looks like a shortcut recorder but toggles a bare-modifier "⌘" shortcut.
-/// Clicking the X clears it; clicking the value area restores "⌘".
+/// A small view that matches the KeyboardShortcuts.RecorderCocoa style but toggles a
+/// bare-modifier "⌘" shortcut. Clicking the ⊗ clears it; clicking the value restores "⌘".
 private class RevealShortcutView: NSView {
     private let valueLabel: NSTextField
     private let clearButton: NSButton
@@ -1043,12 +1043,12 @@ private class RevealShortcutView: NSView {
     init(target: AnyObject) {
         enabled = UserDefaults.standard.object(forKey: "revealProjectNumbers") as? Bool ?? true
         valueLabel = NSTextField(labelWithString: "")
-        clearButton = NSButton(title: "✕", target: nil, action: nil)
+        clearButton = NSButton(image: NSImage(systemSymbolName: "xmark.circle.fill",
+                                              accessibilityDescription: "Clear")!,
+                               target: nil, action: nil)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 4
-        layer?.borderWidth = 0.5
 
         valueLabel.font = .systemFont(ofSize: 12)
         valueLabel.alignment = .center
@@ -1056,7 +1056,8 @@ private class RevealShortcutView: NSView {
 
         clearButton.bezelStyle = .inline
         clearButton.isBordered = false
-        clearButton.font = .systemFont(ofSize: 9)
+        clearButton.imageScaling = .scaleProportionallyDown
+        clearButton.contentTintColor = .tertiaryLabelColor
         clearButton.translatesAutoresizingMaskIntoConstraints = false
         clearButton.target = self
         clearButton.action = #selector(clearClicked)
@@ -1065,14 +1066,15 @@ private class RevealShortcutView: NSView {
         addSubview(clearButton)
 
         NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: 90),
+            widthAnchor.constraint(equalToConstant: 98),
             heightAnchor.constraint(equalToConstant: 22),
             valueLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
             valueLabel.trailingAnchor.constraint(equalTo: clearButton.leadingAnchor, constant: -2),
             valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            clearButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            clearButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
             clearButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            clearButton.widthAnchor.constraint(equalToConstant: 16),
+            clearButton.widthAnchor.constraint(equalToConstant: 18),
+            clearButton.heightAnchor.constraint(equalToConstant: 18),
         ])
 
         let click = NSClickGestureRecognizer(target: self, action: #selector(valueClicked))
@@ -1100,12 +1102,10 @@ private class RevealShortcutView: NSView {
             valueLabel.stringValue = "⌘"
             valueLabel.textColor = .labelColor
             clearButton.isHidden = false
-            layer?.borderColor = NSColor.separatorColor.cgColor
         } else {
-            valueLabel.stringValue = "—"
+            valueLabel.stringValue = ""
             valueLabel.textColor = .tertiaryLabelColor
             clearButton.isHidden = true
-            layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.3).cgColor
         }
     }
 }

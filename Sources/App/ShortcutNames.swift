@@ -21,6 +21,7 @@ extension KeyboardShortcuts.Name {
     static let tab7 = Self("tab7", default: .init(.seven, modifiers: .command))
     static let tab8 = Self("tab8", default: .init(.eight, modifiers: .command))
     static let tab9 = Self("tab9", default: .init(.nine, modifiers: .command))
+    static let tab0 = Self("tab0", default: .init(.zero, modifiers: .command))
 }
 
 /// All configurable shortcuts with display names, for the settings UI.
@@ -50,8 +51,9 @@ let configurableShortcuts: [ShortcutEntry] = [
     ShortcutEntry(name: .tab7, label: "Project 7"),
     ShortcutEntry(name: .tab8, label: "Project 8"),
     ShortcutEntry(name: .tab9, label: "Project 9"),
+    ShortcutEntry(name: .tab0, label: "Project 10"),
 ]
 
 let tabShortcutNames: [KeyboardShortcuts.Name] = [
-    .tab1, .tab2, .tab3, .tab4, .tab5, .tab6, .tab7, .tab8, .tab9,
+    .tab1, .tab2, .tab3, .tab4, .tab5, .tab6, .tab7, .tab8, .tab9, .tab0,
 ]
