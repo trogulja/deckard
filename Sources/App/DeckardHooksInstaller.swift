@@ -105,6 +105,10 @@ enum DeckardHooksInstaller {
         NSHomeDirectory() + "/.deckard/original-statusline.json"
     }()
 
+    private static let hooksDirPath: String = {
+        NSHomeDirectory() + "/.deckard/hooks"
+    }()
+
     private static let hookEvents: [(key: String, arg: String)] = [
         ("SessionStart", "session-start"),
         ("Stop", "stop"),
@@ -218,6 +222,68 @@ enum DeckardHooksInstaller {
         ) {
             try? data.write(to: URL(fileURLWithPath: effectiveSettingsPath))
         }
+    }
+
+    /// Remove all Deckard hooks from Claude Code settings and restore the original statusLine.
+    /// Parameters are injectable for testing.
+    static func uninstall(
+        settingsPath: String? = nil,
+        originalStatusLinePath: String? = nil,
+        hooksDirPath: String? = nil
+    ) {
+        let effectiveSettingsPath = settingsPath ?? Self.settingsPath
+        let effectiveOriginalPath = originalStatusLinePath ?? Self.originalStatusLinePath
+        let effectiveHooksDir = hooksDirPath ?? Self.hooksDirPath
+        let fm = FileManager.default
+
+        // Read current settings
+        guard let data = fm.contents(atPath: effectiveSettingsPath),
+              var settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return
+        }
+
+        // Restore or remove statusLine
+        if let origData = fm.contents(atPath: effectiveOriginalPath),
+           let original = try? JSONSerialization.jsonObject(with: origData) as? [String: Any] {
+            settings["statusLine"] = original
+        } else {
+            settings.removeValue(forKey: "statusLine")
+        }
+
+        // Remove Deckard hook entries from all events, preserving non-Deckard hooks
+        if var hooks = settings["hooks"] as? [String: Any] {
+            for (eventName, value) in hooks {
+                guard var entries = value as? [[String: Any]] else { continue }
+                entries.removeAll { entry in
+                    guard let entryHooks = entry["hooks"] as? [[String: Any]] else { return false }
+                    return entryHooks.contains { hook in
+                        (hook["command"] as? String)?.contains(".deckard/hooks/") == true
+                    }
+                }
+                if entries.isEmpty {
+                    hooks.removeValue(forKey: eventName)
+                } else {
+                    hooks[eventName] = entries
+                }
+            }
+            if hooks.isEmpty {
+                settings.removeValue(forKey: "hooks")
+            } else {
+                settings["hooks"] = hooks
+            }
+        }
+
+        // Write back
+        if let writeData = try? JSONSerialization.data(
+            withJSONObject: settings,
+            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        ) {
+            try? writeData.write(to: URL(fileURLWithPath: effectiveSettingsPath))
+        }
+
+        // Clean up hooks directory and saved original
+        try? fm.removeItem(atPath: effectiveHooksDir)
+        try? fm.removeItem(atPath: effectiveOriginalPath)
     }
 
     private static func saveOriginalStatusLine(_ config: [String: Any], to path: String) {

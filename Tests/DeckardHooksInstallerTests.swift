@@ -224,6 +224,106 @@ final class DeckardHooksInstallerTests: XCTestCase {
         XCTAssertTrue(content.contains("ORIG_CMD"), "Script should extract and run original command")
     }
 
+    // MARK: - Uninstall
+
+    func testUninstallRestoresOriginalStatusLine() throws {
+        let tempDir = NSTemporaryDirectory() + "deckard-hooks-test-\(UUID().uuidString)/"
+        let hooksDir = tempDir + "hooks/"
+        try FileManager.default.createDirectory(atPath: hooksDir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(atPath: tempDir) }
+
+        let settingsPath = tempDir + "settings.json"
+        let originalSavePath = tempDir + "original-statusline.json"
+
+        // Save an original
+        let originalConfig: [String: Any] = ["type": "command", "command": "/usr/local/bin/cc-statusline"]
+        let origData = try JSONSerialization.data(withJSONObject: originalConfig, options: .prettyPrinted)
+        try origData.write(to: URL(fileURLWithPath: originalSavePath))
+
+        // Settings with Deckard's hooks and statusLine
+        let settings: [String: Any] = [
+            "allowedTools": ["Read"],
+            "statusLine": ["type": "command", "command": "~/.deckard/hooks/statusline.sh"],
+            "hooks": [
+                "SessionStart": [
+                    [
+                        "matcher": "",
+                        "hooks": [["type": "command", "command": "~/.deckard/hooks/notify.sh session-start", "timeout": 10]],
+                    ],
+                    [
+                        "matcher": "",
+                        "hooks": [["type": "command", "command": "/other/tool start", "timeout": 5]],
+                    ],
+                ],
+            ],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: settings, options: .prettyPrinted)
+        try data.write(to: URL(fileURLWithPath: settingsPath))
+
+        // Create dummy hook scripts so hooksDir is non-empty
+        try "#!/bin/sh".write(toFile: hooksDir + "notify.sh", atomically: true, encoding: .utf8)
+
+        DeckardHooksInstaller.uninstall(
+            settingsPath: settingsPath,
+            originalStatusLinePath: originalSavePath,
+            hooksDirPath: hooksDir
+        )
+
+        // Verify original statusLine was restored
+        let restored = try Data(contentsOf: URL(fileURLWithPath: settingsPath))
+        let restoredSettings = try JSONSerialization.jsonObject(with: restored) as! [String: Any]
+        let restoredStatusLine = restoredSettings["statusLine"] as! [String: Any]
+        XCTAssertEqual(restoredStatusLine["command"] as? String, "/usr/local/bin/cc-statusline")
+
+        // Verify Deckard hooks were removed but other hooks preserved
+        let restoredHooks = restoredSettings["hooks"] as! [String: Any]
+        let sessionStartEntries = restoredHooks["SessionStart"] as! [[String: Any]]
+        XCTAssertEqual(sessionStartEntries.count, 1)
+        let remainingHook = (sessionStartEntries[0]["hooks"] as! [[String: Any]])[0]
+        XCTAssertTrue((remainingHook["command"] as! String).contains("/other/tool"))
+
+        // Verify allowedTools untouched
+        XCTAssertNotNil(restoredSettings["allowedTools"])
+
+        // Verify hooks dir was removed
+        XCTAssertFalse(FileManager.default.fileExists(atPath: hooksDir))
+
+        // Verify saved original file was also cleaned up
+        XCTAssertFalse(FileManager.default.fileExists(atPath: originalSavePath))
+    }
+
+    func testUninstallRemovesStatusLineWhenNoOriginal() throws {
+        let tempDir = NSTemporaryDirectory() + "deckard-hooks-test-\(UUID().uuidString)/"
+        try FileManager.default.createDirectory(atPath: tempDir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(atPath: tempDir) }
+
+        let settingsPath = tempDir + "settings.json"
+        let originalSavePath = tempDir + "original-statusline.json"
+        let hooksDir = tempDir + "hooks/"
+
+        // Settings with Deckard's statusLine, no saved original
+        let settings: [String: Any] = [
+            "allowedTools": ["Read"],
+            "statusLine": ["type": "command", "command": "~/.deckard/hooks/statusline.sh"],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: settings, options: .prettyPrinted)
+        try data.write(to: URL(fileURLWithPath: settingsPath))
+
+        DeckardHooksInstaller.uninstall(
+            settingsPath: settingsPath,
+            originalStatusLinePath: originalSavePath,
+            hooksDirPath: hooksDir
+        )
+
+        let restored = try Data(contentsOf: URL(fileURLWithPath: settingsPath))
+        let restoredSettings = try JSONSerialization.jsonObject(with: restored) as! [String: Any]
+
+        // statusLine should be removed entirely
+        XCTAssertNil(restoredSettings["statusLine"])
+        // Other settings preserved
+        XCTAssertNotNil(restoredSettings["allowedTools"])
+    }
+
     // MARK: - Script content markers
 
     func testHookScriptExpectedMarkers() {
