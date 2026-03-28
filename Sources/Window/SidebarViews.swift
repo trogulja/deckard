@@ -20,6 +20,7 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
     let index: Int
     private let label: NSTextField
     private let badgeContainer: NSStackView
+    private let shortcutLabel: NSTextField
     private weak var target: AnyObject?
     private let action: Selector
     private var dragStartPoint: NSPoint?
@@ -28,6 +29,18 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
     /// Leading indent (used for projects inside folders).
     var indent: CGFloat = 0 {
         didSet { leadingConstraint?.constant = 8 + indent }
+    }
+
+    /// Show or hide a keyboard shortcut number badge (1-9).
+    var shortcutNumber: Int? {
+        didSet {
+            if let n = shortcutNumber {
+                shortcutLabel.stringValue = "\(n)"
+                shortcutLabel.isHidden = false
+            } else {
+                shortcutLabel.isHidden = true
+            }
+        }
     }
 
     init(title: String, bold: Bool, index: Int, target: AnyObject, action: Selector) {
@@ -47,6 +60,13 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         badgeContainer.spacing = 3
         badgeContainer.setContentHuggingPriority(.required, for: .horizontal)
 
+        shortcutLabel = NSTextField(labelWithString: "")
+        shortcutLabel.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
+        shortcutLabel.textColor = ThemeManager.shared.currentColors.secondaryText
+        shortcutLabel.isHidden = true
+        shortcutLabel.setContentHuggingPriority(.required, for: .horizontal)
+        shortcutLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -54,7 +74,9 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
         label.translatesAutoresizingMaskIntoConstraints = false
         label.toolTip = shortcutTooltip("Close Folder", for: .closeFolder)
         badgeContainer.translatesAutoresizingMaskIntoConstraints = false
+        shortcutLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
+        addSubview(shortcutLabel)
         addSubview(badgeContainer)
 
         let lc = label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8)
@@ -64,7 +86,9 @@ class VerticalTabRowView: NSView, NSTextFieldDelegate, NSDraggingSource {
             heightAnchor.constraint(equalToConstant: 28),
             lc,
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: badgeContainer.leadingAnchor, constant: -4),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: shortcutLabel.leadingAnchor, constant: -4),
+            shortcutLabel.trailingAnchor.constraint(equalTo: badgeContainer.leadingAnchor, constant: -4),
+            shortcutLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             badgeContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             badgeContainer.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])

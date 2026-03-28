@@ -191,9 +191,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         fileMenu.addItem(prevProjectItem)
         fileMenu.addItem(.separator())
 
-        // Cmd+1-9 for direct tab access
+        // Cmd+1-9 for direct project access
         for i in 1...9 {
-            let item = NSMenuItem(title: "Tab \(i)", action: #selector(selectTabByNumber(_:)), keyEquivalent: "")
+            let item = NSMenuItem(title: "Project \(i)", action: #selector(selectTabByNumber(_:)), keyEquivalent: "")
             item.tag = i - 1
             item.setShortcut(for: tabShortcutNames[i - 1])
             fileMenu.addItem(item)

@@ -166,6 +166,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     var terminalActivity: [UUID: ProcessMonitor.ActivityInfo] = [:]
     /// Consecutive active poll count per surface — require 2 before showing as active.
     private var terminalActiveStreak: [UUID: Int] = [:]
+    private var flagsMonitor: Any?
 
     init() {
         let window = NSWindow(
@@ -217,6 +218,11 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
 
         restoreOrCreateInitial()
 
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.updateShortcutIndicators(commandHeld: event.modifierFlags.contains(.command))
+            return event
+        }
+
         // If no projects after restore, auto-show the project picker
         if projects.isEmpty {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -237,6 +243,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     required init?(coder: NSCoder) { fatalError() }
 
     deinit {
+        if let monitor = flagsMonitor { NSEvent.removeMonitor(monitor) }
         SessionManager.shared.stopAutosave()
         processMonitorTimer?.invalidate()
     }
@@ -1331,6 +1338,18 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         let ordered = projectIndicesInSidebarOrder()
         guard n >= 0, n < ordered.count else { return }
         selectProject(at: ordered[n])
+    }
+
+    private func updateShortcutIndicators(commandHeld: Bool) {
+        let ordered = commandHeld ? projectIndicesInSidebarOrder() : []
+        for view in sidebarStackView.arrangedSubviews {
+            guard let row = view as? VerticalTabRowView else { continue }
+            if let pos = ordered.firstIndex(of: row.index), pos < 9 {
+                row.shortcutNumber = pos + 1
+            } else {
+                row.shortcutNumber = nil
+            }
+        }
     }
 }
 
