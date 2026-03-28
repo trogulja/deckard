@@ -910,32 +910,45 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSTextFie
         grid.column(at: 2).width = 60
         grid.column(at: 3).width = 100
 
-        // Lay out entries in two columns
+        // Build right-column entries: reveal toggle first, then the project shortcuts
+        let revealLabel = NSTextField(labelWithString: "Show Numbers")
+        revealLabel.alignment = .right
+        let revealToggle = RevealShortcutView()
+
+        struct RightEntry {
+            let label: NSView
+            let control: NSView
+        }
+        var rightEntries: [RightEntry] = [RightEntry(label: revealLabel, control: revealToggle)]
         let entries = configurableShortcuts
-        let rows = (entries.count + 1) / 2
-        for row in 0..<rows {
-            let leftIdx = row
-            let rightIdx = row + rows
-
-            let leftLabel = NSTextField(labelWithString: entries[leftIdx].label)
-            leftLabel.alignment = .right
-            let leftRecorder = KeyboardShortcuts.RecorderCocoa(for: entries[leftIdx].name)
-
-            if rightIdx < entries.count {
-                let rightLabel = NSTextField(labelWithString: entries[rightIdx].label)
-                rightLabel.alignment = .right
-                let rightRecorder = KeyboardShortcuts.RecorderCocoa(for: entries[rightIdx].name)
-                grid.addRow(with: [leftLabel, leftRecorder, rightLabel, rightRecorder])
-            } else {
-                grid.addRow(with: [leftLabel, leftRecorder, NSView(), NSView()])
-            }
+        let leftCount = entries.count / 2 + entries.count % 2
+        for i in leftCount..<entries.count {
+            let l = NSTextField(labelWithString: entries[i].label)
+            l.alignment = .right
+            rightEntries.append(RightEntry(label: l, control: KeyboardShortcuts.RecorderCocoa(for: entries[i].name)))
         }
 
-        // Reveal project numbers row — a modifier-only "shortcut" with clear/restore
-        let revealLabel = NSTextField(labelWithString: "Show Project Numbers")
-        revealLabel.alignment = .right
-        let revealToggle = RevealShortcutView(target: self)
-        grid.addRow(with: [revealLabel, revealToggle, NSView(), NSView()])
+        // Lay out in two columns, pairing left entries with right entries
+        let rowCount = max(leftCount, rightEntries.count)
+        for row in 0..<rowCount {
+            let leftLabel: NSView
+            let leftControl: NSView
+            if row < leftCount {
+                let l = NSTextField(labelWithString: entries[row].label)
+                l.alignment = .right
+                leftLabel = l
+                leftControl = KeyboardShortcuts.RecorderCocoa(for: entries[row].name)
+            } else {
+                leftLabel = NSView()
+                leftControl = NSView()
+            }
+
+            if row < rightEntries.count {
+                grid.addRow(with: [leftLabel, leftControl, rightEntries[row].label, rightEntries[row].control])
+            } else {
+                grid.addRow(with: [leftLabel, leftControl, NSView(), NSView()])
+            }
+        }
 
         // Reset button spanning the right side
         let resetButton = NSButton(title: "Reset All to Defaults", target: self, action: #selector(resetShortcuts))
@@ -1033,79 +1046,54 @@ private var settingsKeyAssoc: UInt8 = 0
 
 // MARK: - Reveal Shortcut Toggle
 
-/// A small view that matches the KeyboardShortcuts.RecorderCocoa style but toggles a
-/// bare-modifier "⌘" shortcut. Clicking the ⊗ clears it; clicking the value restores "⌘".
-private class RevealShortcutView: NSView {
-    private let valueLabel: NSTextField
-    private let clearButton: NSButton
-    private var enabled: Bool
+/// An NSSearchField styled identically to KeyboardShortcuts.RecorderCocoa but for a
+/// bare-modifier toggle ("⌘"). The cancel ⊗ button clears it; clicking restores it.
+private class RevealShortcutView: NSSearchField, NSSearchFieldDelegate {
+    private let minimumWidth = 130.0
+    private var cancelButtonCell: NSButtonCell?
 
-    init(target: AnyObject) {
-        enabled = UserDefaults.standard.object(forKey: "revealProjectNumbers") as? Bool ?? true
-        valueLabel = NSTextField(labelWithString: "")
-        clearButton = NSButton(image: NSImage(systemSymbolName: "xmark.circle.fill",
-                                              accessibilityDescription: "Clear")!,
-                               target: nil, action: nil)
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-
-        valueLabel.font = .systemFont(ofSize: 12)
-        valueLabel.alignment = .center
-        valueLabel.translatesAutoresizingMaskIntoConstraints = false
-
-        clearButton.bezelStyle = .inline
-        clearButton.isBordered = false
-        clearButton.imageScaling = .scaleProportionallyDown
-        clearButton.contentTintColor = .tertiaryLabelColor
-        clearButton.translatesAutoresizingMaskIntoConstraints = false
-        clearButton.target = self
-        clearButton.action = #selector(clearClicked)
-
-        addSubview(valueLabel)
-        addSubview(clearButton)
-
-        NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: 98),
-            heightAnchor.constraint(equalToConstant: 22),
-            valueLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            valueLabel.trailingAnchor.constraint(equalTo: clearButton.leadingAnchor, constant: -2),
-            valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            clearButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            clearButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            clearButton.widthAnchor.constraint(equalToConstant: 18),
-            clearButton.heightAnchor.constraint(equalToConstant: 18),
-        ])
-
-        let click = NSClickGestureRecognizer(target: self, action: #selector(valueClicked))
-        valueLabel.addGestureRecognizer(click)
-
-        updateAppearance()
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: 130, height: 24))
+        self.delegate = self
+        self.placeholderString = "Record Shortcut"
+        self.alignment = .center
+        (cell as? NSSearchFieldCell)?.searchButtonCell = nil
+        self.wantsLayer = true
+        setContentHuggingPriority(.defaultHigh, for: .vertical)
+        setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        self.cancelButtonCell = (cell as? NSSearchFieldCell)?.cancelButtonCell
+        updateValue()
     }
 
+    @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    @objc private func clearClicked() {
-        enabled = false
-        UserDefaults.standard.set(false, forKey: "revealProjectNumbers")
-        updateAppearance()
+    override var intrinsicContentSize: CGSize {
+        var size = super.intrinsicContentSize
+        size.width = minimumWidth
+        return size
     }
 
-    @objc private func valueClicked() {
-        enabled = true
-        UserDefaults.standard.set(true, forKey: "revealProjectNumbers")
-        updateAppearance()
+    private var revealEnabled: Bool {
+        UserDefaults.standard.object(forKey: "revealProjectNumbers") as? Bool ?? true
     }
 
-    private func updateAppearance() {
-        if enabled {
-            valueLabel.stringValue = "⌘"
-            valueLabel.textColor = .labelColor
-            clearButton.isHidden = false
-        } else {
-            valueLabel.stringValue = ""
-            valueLabel.textColor = .tertiaryLabelColor
-            clearButton.isHidden = true
+    private func updateValue() {
+        stringValue = revealEnabled ? "⌘" : ""
+        (cell as? NSSearchFieldCell)?.cancelButtonCell = stringValue.isEmpty ? nil : cancelButtonCell
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        if stringValue.isEmpty {
+            UserDefaults.standard.set(false, forKey: "revealProjectNumbers")
+        }
+        (cell as? NSSearchFieldCell)?.cancelButtonCell = stringValue.isEmpty ? nil : cancelButtonCell
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if !revealEnabled {
+            UserDefaults.standard.set(true, forKey: "revealProjectNumbers")
+            updateValue()
         }
     }
 }
