@@ -28,6 +28,8 @@
 
 		AABB0004AABB0004AABB0004 /* ShortcutNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB0005AABB0005AABB0005 /* ShortcutNames.swift */; };
 		AABB0006AABB0006AABB0006 /* DeckardHooksInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB0007AABB0007AABB0007 /* DeckardHooksInstaller.swift */; };
+		FDAC0001FDAC0001FDAC0001 /* FullDiskAccessChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDAC0002FDAC0002FDAC0002 /* FullDiskAccessChecker.swift */; };
+		FDAC0003FDAC0003FDAC0003 /* FullDiskAccessCheckerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDAC0004FDAC0004FDAC0004 /* FullDiskAccessCheckerTests.swift */; };
 		CC110001CC110001CC110001 /* ThemeColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110002CC110002CC110002 /* ThemeColors.swift */; };
 		TM000001TM000001TM000001 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM000002TM000002TM000002 /* ThemeManager.swift */; };
 		TC000001TC000001TC000001 /* TerminalColorScheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = TC000002TC000002TC000002 /* TerminalColorScheme.swift */; };
@@ -78,6 +80,8 @@
 		E5FD7F070DDB4216278EFDE6 /* ContextMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextMonitor.swift; sourceTree = "<group>"; };
 		AABB0005AABB0005AABB0005 /* ShortcutNames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutNames.swift; sourceTree = "<group>"; };
 		AABB0007AABB0007AABB0007 /* DeckardHooksInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeckardHooksInstaller.swift; sourceTree = "<group>"; };
+		FDAC0002FDAC0002FDAC0002 /* FullDiskAccessChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullDiskAccessChecker.swift; sourceTree = "<group>"; };
+		FDAC0004FDAC0004FDAC0004 /* FullDiskAccessCheckerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullDiskAccessCheckerTests.swift; sourceTree = "<group>"; };
 		CC110002CC110002CC110002 /* ThemeColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeColors.swift; sourceTree = "<group>"; };
 		TM000002TM000002TM000002 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		TC000002TC000002TC000002 /* TerminalColorScheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalColorScheme.swift; sourceTree = "<group>"; };
@@ -237,6 +241,7 @@
 				88AA91CDBC6DDE958543FB29 /* main.swift */,
 				AABB0005AABB0005AABB0005 /* ShortcutNames.swift */,
 				AABB0007AABB0007AABB0007 /* DeckardHooksInstaller.swift */,
+				FDAC0002FDAC0002FDAC0002 /* FullDiskAccessChecker.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -250,6 +255,7 @@
 				AA1E0002AA1E0002AA1E0002 /* ControlSocketTests.swift */,
 				AA1C0002AA1C0002AA1C0002 /* DeckardHooksInstallerTests.swift */,
 				AA160002AA160002AA160002 /* DiagnosticLogTests.swift */,
+				FDAC0004FDAC0004FDAC0004 /* FullDiskAccessCheckerTests.swift */,
 				AA170002AA170002AA170002 /* HookHandlerTests.swift */,
 				AA180002AA180002AA180002 /* ProcessMonitorTests.swift */,
 				QA200005QA200005QA200005 /* QuotaMonitorTests.swift */,
@@ -406,6 +412,7 @@
 				432752F9187D2E815F617B96 /* main.swift in Sources */,
 				AABB0004AABB0004AABB0004 /* ShortcutNames.swift in Sources */,
 				AABB0006AABB0006AABB0006 /* DeckardHooksInstaller.swift in Sources */,
+				FDAC0001FDAC0001FDAC0001 /* FullDiskAccessChecker.swift in Sources */,
 				CC110001CC110001CC110001 /* ThemeColors.swift in Sources */,
 				TM000001TM000001TM000001 /* ThemeManager.swift in Sources */,
 				TC000001TC000001TC000001 /* TerminalColorScheme.swift in Sources */,
@@ -428,6 +435,7 @@
 				AA140001AA140001AA140001 /* ThemeManagerTests.swift in Sources */,
 				AA150001AA150001AA150001 /* ControlMessageTests.swift in Sources */,
 				AA160001AA160001AA160001 /* DiagnosticLogTests.swift in Sources */,
+				FDAC0003FDAC0003FDAC0003 /* FullDiskAccessCheckerTests.swift in Sources */,
 				AA170001AA170001AA170001 /* HookHandlerTests.swift in Sources */,
 				AA180001AA180001AA180001 /* ProcessMonitorTests.swift in Sources */,
 				AA190001AA190001AA190001 /* ContextMonitorTests.swift in Sources */,
