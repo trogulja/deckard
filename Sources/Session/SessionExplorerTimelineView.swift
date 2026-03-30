@@ -395,7 +395,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
 
         // Action summary (what Claude did in response)
         let actionField: NSTextField?
-        if let summary = entry.actionSummary {
+        if let summary = entry.actionSummary, !summary.isEmpty {
             let field = NSTextField(labelWithString: "\u{2192} \(summary)")
             field.font = .systemFont(ofSize: 11)
             field.textColor = .secondaryLabelColor

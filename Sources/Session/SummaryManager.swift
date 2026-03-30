@@ -164,9 +164,14 @@ class SummaryManager {
                     self?.saveSummary(sessionId: sessionId, summary: summary, turnCount: currentTurnCount)
                 }
 
-                // Merge and persist turn summaries
-                let mergedTurns = existingTurnSummaries.merging(newTurnSummaries) { _, new in new }
-                if !newTurnSummaries.isEmpty {
+                // Mark all requested turns as cached (empty string for ones haiku skipped)
+                // so they aren't re-requested on next open
+                var allRequestedTurns: [Int: String] = [:]
+                for turnIndex in needsTurnSummaries.keys {
+                    allRequestedTurns[turnIndex] = newTurnSummaries[turnIndex] ?? ""
+                }
+                let mergedTurns = existingTurnSummaries.merging(allRequestedTurns) { _, new in new }
+                if !needsTurnSummaries.isEmpty {
                     self?.saveTurnSummaries(sessionId: sessionId, summaries: mergedTurns)
                 }
 
