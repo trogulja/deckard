@@ -22,9 +22,9 @@ class HookHandler {
             reply(ControlResponse(ok: true))
 
         case "hook.stop", "hook.stop-failure":
-            // Claude finished responding (or hit a limit/error) — waiting for user input
+            // Claude finished responding — mark as unseen if tab isn't focused
             if let surfaceId = message.surfaceId {
-                windowController?.updateBadge(forSurfaceId: surfaceId, state: .waitingForInput)
+                windowController?.updateBadgeToIdleOrUnseen(forSurfaceId: surfaceId, isClaude: true)
             }
             forwardRateLimits(from: message)
             reply(ControlResponse(ok: true))
@@ -35,7 +35,11 @@ class HookHandler {
                 if type.contains("permission") {
                     windowController?.updateBadge(forSurfaceId: surfaceId, state: .needsPermission)
                 } else {
-                    windowController?.updateBadge(forSurfaceId: surfaceId, state: .waitingForInput)
+                    // Don't overwrite completedUnseen — the tab hasn't been visited yet
+                    if let tab = windowController?.tabForSurfaceId(surfaceId),
+                       tab.badgeState != .completedUnseen {
+                        windowController?.updateBadge(forSurfaceId: surfaceId, state: .waitingForInput)
+                    }
                 }
             }
             reply(ControlResponse(ok: true))

@@ -31,6 +31,8 @@ class TabItem {
         case terminalIdle     // muted teal - terminal at prompt
         case terminalActive   // teal pulsing - terminal foreground process has activity
         case terminalError    // red - terminal process exited with error
+        case completedUnseen        // vivid purple - Claude finished while tab unfocused
+        case terminalCompletedUnseen // vivid teal - terminal finished while tab unfocused
     }
 
     init(surface: TerminalSurface, name: String, isClaude: Bool) {
@@ -566,6 +568,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         } else {
             // Always clamp for safe array access, even during restore
             let safeIdx = max(0, min(project.selectedTabIndex, project.tabs.count - 1))
+            clearUnseenIfNeeded(project.tabs[safeIdx])
             showTab(project.tabs[safeIdx])
         }
 
@@ -747,15 +750,33 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
             project.selectedTabIndex = min(idx, project.tabs.count - 1)
             rebuildTabBar()
             rebuildSidebar()
+            clearUnseenIfNeeded(project.tabs[project.selectedTabIndex])
             showTab(project.tabs[project.selectedTabIndex])
         }
         saveState()
+    }
+
+    /// If the tab is in a completedUnseen state, revert to the normal idle state.
+    func clearUnseenIfNeeded(_ tab: TabItem) {
+        switch tab.badgeState {
+        case .completedUnseen:
+            tab.badgeState = .waitingForInput
+            rebuildSidebar()
+            rebuildTabBar()
+        case .terminalCompletedUnseen:
+            tab.badgeState = .terminalIdle
+            rebuildSidebar()
+            rebuildTabBar()
+        default:
+            break
+        }
     }
 
     func selectTabInProject(at tabIndex: Int) {
         guard let project = currentProject else { return }
         guard tabIndex >= 0, tabIndex < project.tabs.count else { return }
         project.selectedTabIndex = tabIndex
+        clearUnseenIfNeeded(project.tabs[tabIndex])
         rebuildTabBar()
         showTab(project.tabs[tabIndex])
     }
@@ -768,6 +789,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         guard tabIndex >= 0, tabIndex < project.tabs.count else { return }
         guard tabIndex != project.selectedTabIndex else { return }
         project.selectedTabIndex = tabIndex
+        clearUnseenIfNeeded(project.tabs[tabIndex])
         showTab(project.tabs[tabIndex])
     }
 
@@ -915,7 +937,20 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
                 terminalActiveStreak[tab.id] = newStreak
                 let confirmedActive = newStreak >= 2
 
-                let newBadge: TabItem.BadgeState = confirmedActive ? .terminalActive : .terminalIdle
+                let newBadge: TabItem.BadgeState
+                if confirmedActive {
+                    newBadge = .terminalActive
+                } else if tab.badgeState == .terminalActive {
+                    // Transitioning from active to idle — check focus
+                    let focused = isTabFocused(tab.id.uuidString)
+                    newBadge = focused ? .terminalIdle : .terminalCompletedUnseen
+                } else if tab.badgeState == .terminalCompletedUnseen {
+                    // Stay unseen until tab is visited (cleared elsewhere)
+                    newBadge = .terminalCompletedUnseen
+                } else {
+                    newBadge = .terminalIdle
+                }
+
                 terminalActivity[tab.id] = activity
                 if tab.badgeState != newBadge {
                     if newBadge == .terminalActive {
@@ -1045,6 +1080,24 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         DiagnosticLog.shared.log("badge",
             "updateBadge: surfaceId=\(surfaceIdStr) state=\(state) currentFR=\(type(of: window?.firstResponder))")
         tab.badgeState = state
+        rebuildSidebar()
+        rebuildTabBar()
+    }
+
+    /// Like updateBadge, but substitutes completedUnseen/terminalCompletedUnseen
+    /// when the tab transitions to an idle state while unfocused.
+    func updateBadgeToIdleOrUnseen(forSurfaceId surfaceIdStr: String, isClaude: Bool) {
+        guard let tab = tabForSurfaceId(surfaceIdStr) else { return }
+        let wasBusy = isClaude
+            ? (tab.badgeState == .thinking || tab.badgeState == .needsPermission)
+            : (tab.badgeState == .terminalActive)
+        let focused = isTabFocused(surfaceIdStr)
+        let idleState: TabItem.BadgeState = isClaude ? .waitingForInput : .terminalIdle
+        let unseenState: TabItem.BadgeState = isClaude ? .completedUnseen : .terminalCompletedUnseen
+        let newState = (wasBusy && !focused) ? unseenState : idleState
+        DiagnosticLog.shared.log("badge",
+            "updateBadgeToIdleOrUnseen: surfaceId=\(surfaceIdStr) wasBusy=\(wasBusy) focused=\(focused) -> \(newState)")
+        tab.badgeState = newState
         rebuildSidebar()
         rebuildTabBar()
     }
