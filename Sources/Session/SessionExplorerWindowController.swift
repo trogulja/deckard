@@ -389,7 +389,7 @@ extension SessionExplorerWindowController: NSTableViewDataSource, NSTableViewDel
 
         // Timestamp + message count
         let timeStr = relativeFormatter.localizedString(for: session.modificationDate, relativeTo: Date())
-        let metaText = session.messageCount > 0 ? "\(timeStr) \u{00B7} \(session.messageCount) msgs" : timeStr
+        let metaText = timeStr
         let metaField = NSTextField(labelWithString: metaText)
         metaField.font = .systemFont(ofSize: 10)
         metaField.textColor = .tertiaryLabelColor
