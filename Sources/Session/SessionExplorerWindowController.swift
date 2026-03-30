@@ -113,13 +113,11 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("session"))
         column.title = ""
-        column.resizingMask = .autoresizingMask
         listTableView.addTableColumn(column)
-        listTableView.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         listTableView.headerView = nil
         listTableView.dataSource = self
         listTableView.delegate = self
-        listTableView.usesAutomaticRowHeights = true
+        listTableView.rowHeight = 52
         listTableView.backgroundColor = .clear
         listTableView.selectionHighlightStyle = .regular
         listTableView.target = self
@@ -384,7 +382,7 @@ extension SessionExplorerWindowController: NSTableViewDataSource, NSTableViewDel
     private func makeSessionCell(session: ExplorerSessionInfo, row: Int) -> NSView {
         let cell = NSTableCellView()
 
-        // Star toggle
+        // Star toggle — fixed size, left-aligned
         let starBtn = NSButton(title: session.isBookmarked ? "\u{2605}" : "\u{2606}", target: self, action: #selector(starClicked(_:)))
         starBtn.bezelStyle = .inline
         starBtn.isBordered = false
@@ -393,73 +391,53 @@ extension SessionExplorerWindowController: NSTableViewDataSource, NSTableViewDel
             ? NSColor(red: 1.0, green: 0.8, blue: 0.2, alpha: 0.7)
             : NSColor.tertiaryLabelColor
         starBtn.tag = row
-        starBtn.translatesAutoresizingMaskIntoConstraints = false
-        cell.addSubview(starBtn)
+        starBtn.setContentHuggingPriority(.required, for: .horizontal)
+        starBtn.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        // Title
+        // Title — single line, truncates
         let title = NSTextField(labelWithString: session.savedName ?? session.firstUserMessage)
         title.font = .systemFont(ofSize: 13, weight: session.sessionId == selectedSessionId ? .semibold : .regular)
         title.textColor = .labelColor
         title.lineBreakMode = .byTruncatingTail
-        title.maximumNumberOfLines = 5
-        title.cell?.wraps = true
-        title.cell?.isScrollable = false
-        title.translatesAutoresizingMaskIntoConstraints = false
-        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        cell.addSubview(title)
 
-        // Timestamp + message count
+        // Timestamp
         let timeStr = relativeFormatter.localizedString(for: session.modificationDate, relativeTo: Date())
-        let metaText = timeStr
-        let metaField = NSTextField(labelWithString: metaText)
+        let metaField = NSTextField(labelWithString: timeStr)
         metaField.font = .systemFont(ofSize: 10)
         metaField.textColor = .tertiaryLabelColor
-        metaField.translatesAutoresizingMaskIntoConstraints = false
-        cell.addSubview(metaField)
 
-        // AI summary
-        let summaryField: NSTextField?
+        // Text stack (title + meta + optional summary)
+        var textViews: [NSView] = [title, metaField]
+
         if let summary = session.summary {
             let field = NSTextField(labelWithString: summary)
             field.font = .systemFont(ofSize: 11)
             field.textColor = .secondaryLabelColor
             field.lineBreakMode = .byTruncatingTail
-            field.maximumNumberOfLines = 5
-            field.cell?.wraps = true
-            field.cell?.isScrollable = false
-            field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            field.translatesAutoresizingMaskIntoConstraints = false
-            cell.addSubview(field)
-            summaryField = field
-        } else {
-            summaryField = nil
+            field.maximumNumberOfLines = 2
+            textViews.append(field)
         }
 
-        let bottomView: NSView = summaryField ?? metaField
+        let textStack = NSStackView(views: textViews)
+        textStack.orientation = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 2
+
+        // Horizontal: star + text stack
+        let hStack = NSStackView(views: [starBtn, textStack])
+        hStack.orientation = .horizontal
+        hStack.alignment = .top
+        hStack.spacing = 4
+        hStack.translatesAutoresizingMaskIntoConstraints = false
+        hStack.edgeInsets = NSEdgeInsets(top: 6, left: 4, bottom: 6, right: 8)
+        cell.addSubview(hStack)
 
         NSLayoutConstraint.activate([
-            starBtn.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
-            starBtn.topAnchor.constraint(equalTo: cell.topAnchor, constant: 8),
-            starBtn.widthAnchor.constraint(equalToConstant: 20),
-
-            title.leadingAnchor.constraint(equalTo: starBtn.trailingAnchor, constant: 2),
-            title.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
-            title.topAnchor.constraint(equalTo: cell.topAnchor, constant: 8),
-
-            metaField.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            metaField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
-            metaField.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
-
-            bottomView.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8),
+            hStack.topAnchor.constraint(equalTo: cell.topAnchor),
+            hStack.bottomAnchor.constraint(equalTo: cell.bottomAnchor),
+            hStack.leadingAnchor.constraint(equalTo: cell.leadingAnchor),
+            hStack.trailingAnchor.constraint(equalTo: cell.trailingAnchor),
         ])
-
-        if let summaryField {
-            NSLayoutConstraint.activate([
-                summaryField.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-                summaryField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
-                summaryField.topAnchor.constraint(equalTo: metaField.bottomAnchor, constant: 2),
-            ])
-        }
 
         return cell
     }
