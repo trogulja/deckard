@@ -61,6 +61,7 @@
 		QA200006QA200006QA200006 /* QuotaMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = QA200005QA200005QA200005 /* QuotaMonitorTests.swift */; };
 		SE000001SE000001SE000001 /* SessionExplorerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE000002SE000002SE000002 /* SessionExplorerModels.swift */; };
 		SE000003SE000003SE000003 /* BookmarkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE000004SE000004SE000004 /* BookmarkManager.swift */; };
+		SE000005SE000005SE000005 /* SummaryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE000006SE000006SE000006 /* SummaryManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -118,6 +119,7 @@
 		QA200005QA200005QA200005 /* QuotaMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotaMonitorTests.swift; sourceTree = "<group>"; };
 		SE000002SE000002SE000002 /* SessionExplorerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExplorerModels.swift; sourceTree = "<group>"; };
 		SE000004SE000004SE000004 /* BookmarkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkManager.swift; sourceTree = "<group>"; };
+		SE000006SE000006SE000006 /* SummaryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -217,6 +219,7 @@
 				7BE2AA0719D32ACCD1549184 /* SessionState.swift */,
 				SE000002SE000002SE000002 /* SessionExplorerModels.swift */,
 				SE000004SE000004SE000004 /* BookmarkManager.swift */,
+				SE000006SE000006SE000006 /* SummaryManager.swift */,
 			);
 			path = Session;
 			sourceTree = "<group>";
@@ -429,6 +432,7 @@
 				QA200004QA200004QA200004 /* QuotaView.swift in Sources */,
 				SE000001SE000001SE000001 /* SessionExplorerModels.swift in Sources */,
 				SE000003SE000003SE000003 /* BookmarkManager.swift in Sources */,
+				SE000005SE000005SE000005 /* SummaryManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
