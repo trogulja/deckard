@@ -314,6 +314,16 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         }
 
         let entries = ContextMonitor.shared.parseTimeline(sessionId: sessionId, projectPath: projectPath)
+
+        // Update message count now that we've parsed the full file
+        if let idx = allSessions.firstIndex(where: { $0.sessionId == sessionId }), allSessions[idx].messageCount == 0 {
+            allSessions[idx].messageCount = entries.count
+            applyFilter()
+        }
+
+        // Use the session with updated messageCount for the timeline header
+        let updatedSession = allSessions.first(where: { $0.sessionId == sessionId }) ?? session
+
         // Enrich entries with bookmark state
         let enrichedEntries = entries.map { entry -> TimelineEntry in
             var e = entry
@@ -331,7 +341,7 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         }
 
         timelineController?.showTimeline(
-            session: session,
+            session: updatedSession,
             entries: enrichedEntries,
             scrollToIndex: scrollToMessageIndex
         )
@@ -464,7 +474,8 @@ extension SessionExplorerWindowController: NSTableViewDataSource, NSTableViewDel
         title.translatesAutoresizingMaskIntoConstraints = false
 
         let timeStr = relativeFormatter.localizedString(for: session.modificationDate, relativeTo: Date())
-        let subtitle = NSTextField(labelWithString: "\(timeStr) \u{00B7} \(session.messageCount) msgs")
+        let subtitleText = session.messageCount > 0 ? "\(timeStr) \u{00B7} \(session.messageCount) msgs" : timeStr
+        let subtitle = NSTextField(labelWithString: subtitleText)
         subtitle.font = .systemFont(ofSize: 11)
         subtitle.textColor = .secondaryLabelColor
         subtitle.translatesAutoresizingMaskIntoConstraints = false

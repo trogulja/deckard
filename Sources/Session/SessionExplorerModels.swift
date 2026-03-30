@@ -5,7 +5,7 @@ struct ExplorerSessionInfo {
     let sessionId: String
     let filePath: URL
     let modificationDate: Date
-    let messageCount: Int
+    var messageCount: Int
     let firstUserMessage: String
     var summary: String?
 }
