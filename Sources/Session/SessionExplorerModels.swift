@@ -7,6 +7,7 @@ struct ExplorerSessionInfo {
     let modificationDate: Date
     var messageCount: Int
     let firstUserMessage: String
+    var savedName: String?
     var summary: String?
 }
 

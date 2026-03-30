@@ -160,19 +160,16 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         let savedNames = SessionManager.shared.loadSessionNames()
 
         allSessions = rawSessions.map { session in
-            var info = ExplorerSessionInfo(
+            let name = savedNames[session.sessionId]
+            return ExplorerSessionInfo(
                 sessionId: session.sessionId,
                 filePath: URL(fileURLWithPath: NSHomeDirectory() + "/.claude/projects/\(projectPath.claudeProjectDirName)/\(session.sessionId).jsonl"),
                 modificationDate: session.modificationDate,
                 messageCount: session.messageCount,
                 firstUserMessage: session.firstUserMessage,
+                savedName: (name?.isEmpty == false) ? name : nil,
                 summary: SummaryManager.shared.cachedSummary(forSessionId: session.sessionId)
             )
-            // Use saved name as summary if no AI summary
-            if info.summary == nil, let name = savedNames[session.sessionId], !name.isEmpty {
-                info.summary = name
-            }
-            return info
         }
 
         bookmarks = BookmarkManager.shared.bookmarks(forProjectPath: projectPath)
@@ -188,6 +185,7 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
             filteredBookmarks = bookmarks
         } else {
             filteredSessions = allSessions.filter {
+                ($0.savedName ?? "").lowercased().contains(query) ||
                 ($0.summary ?? "").lowercased().contains(query) ||
                 $0.firstUserMessage.lowercased().contains(query)
             }
@@ -517,8 +515,8 @@ extension SessionExplorerWindowController: NSTableViewDataSource, NSTableViewDel
     private func makeSessionCell(session: ExplorerSessionInfo) -> NSView {
         let cell = NSTableCellView()
 
-        // First user message as title
-        let title = NSTextField(labelWithString: session.firstUserMessage)
+        // Saved name as title, falling back to first user message
+        let title = NSTextField(labelWithString: session.savedName ?? session.firstUserMessage)
         title.font = .systemFont(ofSize: 13, weight: session.sessionId == selectedSessionId ? .semibold : .regular)
         title.textColor = .labelColor
         title.lineBreakMode = .byTruncatingTail
