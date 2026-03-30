@@ -18,12 +18,9 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
     var onFork: ((String) -> Void)?
     var onForkAtPoint: ((String, Int) -> Void)?
     var onBookmarkToggle: ((String, TimelineEntry) -> Void)?
-    var onSummarizeSession: (() -> Void)?
-    var onSummarizeActions: (() -> Void)?
+    var onSummarize: (() -> Void)?
 
-    // Summarize buttons
-    private var summarizeSessionBtn: NSButton?
-    private var summarizeActionsBtn: NSButton?
+    private var summarizeBtn: NSButton?
 
     private let relativeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -67,7 +64,6 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         entries: [TimelineEntry],
         cachedActionSummaries: [Int: String],
         showSummarizeButton: Bool,
-        showSummarizeActionsButton: Bool,
         scrollToIndex: Int?
     ) {
         self.currentSession = session
@@ -82,7 +78,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         containerView.subviews.forEach { $0.removeFromSuperview() }
 
         // Header
-        let header = makeHeader(session: session, showSummarizeButton: showSummarizeButton, showSummarizeActionsButton: showSummarizeActionsButton)
+        let header = makeHeader(session: session, showSummarizeButton: showSummarizeButton)
         self.headerView = header
         header.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(header)
@@ -115,12 +111,8 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         headerTitleField?.stringValue = summary
     }
 
-    func hideSummarizeSessionButton() {
-        summarizeSessionBtn?.isHidden = true
-    }
-
-    func hideSummarizeActionsButton() {
-        summarizeActionsBtn?.isHidden = true
+    func hideSummarizeButton() {
+        summarizeBtn?.isHidden = true
     }
 
     /// Marks turns as currently generating (shows spinner on each row).
@@ -156,7 +148,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
 
     // MARK: - Header
 
-    private func makeHeader(session: ExplorerSessionInfo, showSummarizeButton: Bool, showSummarizeActionsButton: Bool) -> NSView {
+    private func makeHeader(session: ExplorerSessionInfo, showSummarizeButton: Bool) -> NSView {
         let header = NSView()
         header.wantsLayer = true
         header.layer?.backgroundColor = NSColor(white: 0, alpha: 0.1).cgColor
@@ -178,7 +170,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         subtitle.textColor = .secondaryLabelColor
         subtitle.translatesAutoresizingMaskIntoConstraints = false
 
-        // Action buttons
+        // Action buttons (top right)
         let resumeBtn = NSButton(title: "Resume", target: self, action: #selector(resumeClicked))
         resumeBtn.bezelStyle = .rounded
         resumeBtn.translatesAutoresizingMaskIntoConstraints = false
@@ -187,30 +179,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         forkBtn.bezelStyle = .rounded
         forkBtn.translatesAutoresizingMaskIntoConstraints = false
 
-        var actionButtons: [NSView] = [resumeBtn, forkBtn]
-
-        // Summarize buttons (only shown when there's something new to summarize)
-        if showSummarizeButton {
-            let btn = NSButton(title: "Summarize", target: self, action: #selector(summarizeSessionClicked))
-            btn.bezelStyle = .rounded
-            btn.translatesAutoresizingMaskIntoConstraints = false
-            self.summarizeSessionBtn = btn
-            actionButtons.append(btn)
-        } else {
-            self.summarizeSessionBtn = nil
-        }
-
-        if showSummarizeActionsButton {
-            let btn = NSButton(title: "Summarize Actions", target: self, action: #selector(summarizeActionsClicked))
-            btn.bezelStyle = .rounded
-            btn.translatesAutoresizingMaskIntoConstraints = false
-            self.summarizeActionsBtn = btn
-            actionButtons.append(btn)
-        } else {
-            self.summarizeActionsBtn = nil
-        }
-
-        let buttonStack = NSStackView(views: actionButtons)
+        let buttonStack = NSStackView(views: [resumeBtn, forkBtn])
         buttonStack.orientation = .horizontal
         buttonStack.spacing = 8
         buttonStack.translatesAutoresizingMaskIntoConstraints = false
@@ -219,18 +188,48 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         header.addSubview(subtitle)
         header.addSubview(buttonStack)
 
-        NSLayoutConstraint.activate([
-            title.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
-            title.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
-            title.trailingAnchor.constraint(lessThanOrEqualTo: buttonStack.leadingAnchor, constant: -12),
+        // Summarize with AI button (bottom left, below subtitle)
+        if showSummarizeButton {
+            let btn = NSButton(title: "Summarize with AI", target: self, action: #selector(summarizeClicked))
+            btn.bezelStyle = .rounded
+            btn.controlSize = .small
+            btn.translatesAutoresizingMaskIntoConstraints = false
+            self.summarizeBtn = btn
+            header.addSubview(btn)
 
-            subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
-            subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            subtitle.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -12),
+            NSLayoutConstraint.activate([
+                btn.topAnchor.constraint(equalTo: subtitle.bottomAnchor, constant: 8),
+                btn.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+                btn.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -12),
+            ])
 
-            buttonStack.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
-            buttonStack.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
-        ])
+            NSLayoutConstraint.activate([
+                title.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
+                title.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
+                title.trailingAnchor.constraint(lessThanOrEqualTo: buttonStack.leadingAnchor, constant: -12),
+
+                subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
+                subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+
+                buttonStack.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
+                buttonStack.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+            ])
+        } else {
+            self.summarizeBtn = nil
+
+            NSLayoutConstraint.activate([
+                title.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
+                title.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
+                title.trailingAnchor.constraint(lessThanOrEqualTo: buttonStack.leadingAnchor, constant: -12),
+
+                subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
+                subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+                subtitle.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -12),
+
+                buttonStack.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
+                buttonStack.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+            ])
+        }
 
         return header
     }
@@ -245,12 +244,8 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         onFork?(session.sessionId)
     }
 
-    @objc private func summarizeSessionClicked() {
-        onSummarizeSession?()
-    }
-
-    @objc private func summarizeActionsClicked() {
-        onSummarizeActions?()
+    @objc private func summarizeClicked() {
+        onSummarize?()
     }
 
     // MARK: - Empty State

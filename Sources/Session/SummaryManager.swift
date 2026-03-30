@@ -81,6 +81,103 @@ class SummaryManager {
         }
     }
 
+    // MARK: - Combined Summary (session + actions in one AI call)
+
+    /// Generates both a session summary and per-turn action summaries in a single haiku call.
+    /// Calls `completion` on the main thread with (sessionSummary, actionSummaries).
+    func generateCombinedSummaries(
+        sessionId: String,
+        projectPath: String,
+        currentTurnCount: Int,
+        actions: [Int: [String]],
+        completion: @escaping (String?, [Int: String]) -> Void
+    ) {
+        let key = "combined-\(sessionId)"
+        guard !inFlightSessionIds.contains(key) else { return }
+        inFlightSessionIds.insert(key)
+
+        // Determine what needs generation
+        let cachedSessionSummary = loadAll()[sessionId]
+        let needsSessionSummary = cachedSessionSummary == nil || (cachedSessionSummary?.turnCount ?? 0) < currentTurnCount
+
+        let existingTurnSummaries = cachedTurnSummaries(forSessionId: sessionId)
+        let nonEmpty = actions.filter { !$0.value.isEmpty }
+        let needsTurnSummaries = nonEmpty.filter { existingTurnSummaries[$0.key] == nil }
+
+        // If nothing to do, return cached
+        if !needsSessionSummary && needsTurnSummaries.isEmpty {
+            inFlightSessionIds.remove(key)
+            completion(cachedSessionSummary?.summary, existingTurnSummaries)
+            return
+        }
+
+        // Build combined prompt
+        let entries = ContextMonitor.shared.parseTimeline(sessionId: sessionId, projectPath: projectPath)
+        let userMessages = entries.map { $0.message }.joined(separator: "\n---\n")
+
+        var promptParts: [String] = []
+
+        if needsSessionSummary {
+            promptParts.append("PART 1: Summarize this Claude Code session in 1-2 concise sentences, focusing on what was accomplished. Output on a line starting with \"SESSION:\".")
+            promptParts.append("\nUser messages:\n\(userMessages)\n")
+        }
+
+        if !needsTurnSummaries.isEmpty {
+            promptParts.append("PART 2: For each numbered turn below, write a single short sentence (max 10 words) summarizing what was done. Output one line per turn in the format \"N: summary\".\n")
+            for turnIndex in needsTurnSummaries.keys.sorted() {
+                let actionList = needsTurnSummaries[turnIndex]!.joined(separator: ", ")
+                promptParts.append("\(turnIndex): \(actionList)")
+            }
+        }
+
+        promptParts.append("\nOutput nothing else.")
+        let prompt = promptParts.joined(separator: "\n")
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let result = self?.runClaudePrint(prompt: prompt)
+
+            DispatchQueue.main.async {
+                self?.inFlightSessionIds.remove(key)
+
+                var sessionSummary: String?
+                var newTurnSummaries: [Int: String] = [:]
+
+                if let output = result {
+                    for line in output.components(separatedBy: "\n") {
+                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmed.hasPrefix("SESSION:") {
+                            sessionSummary = String(trimmed.dropFirst("SESSION:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                        } else if let colonIdx = trimmed.firstIndex(of: ":") {
+                            let numStr = trimmed[trimmed.startIndex..<colonIdx].trimmingCharacters(in: .whitespacesAndNewlines)
+                            if let turnIdx = Int(numStr) {
+                                let summary = trimmed[trimmed.index(after: colonIdx)...].trimmingCharacters(in: .whitespacesAndNewlines)
+                                if !summary.isEmpty {
+                                    newTurnSummaries[turnIdx] = summary
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Persist session summary
+                if let summary = sessionSummary, needsSessionSummary {
+                    self?.saveSummary(sessionId: sessionId, summary: summary, turnCount: currentTurnCount)
+                }
+
+                // Merge and persist turn summaries
+                let mergedTurns = existingTurnSummaries.merging(newTurnSummaries) { _, new in new }
+                if !newTurnSummaries.isEmpty {
+                    self?.saveTurnSummaries(sessionId: sessionId, summaries: mergedTurns)
+                }
+
+                completion(
+                    sessionSummary ?? cachedSessionSummary?.summary,
+                    mergedTurns
+                )
+            }
+        }
+    }
+
     // MARK: - Turn Summaries (persisted, incremental)
 
     struct CachedTurnSummaries: Codable {

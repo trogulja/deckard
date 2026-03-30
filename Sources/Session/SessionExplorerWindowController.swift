@@ -354,52 +354,33 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         // Load cached action summaries (no AI call — just what we already have)
         let cachedActionSummaries = SummaryManager.shared.cachedTurnSummaries(forSessionId: sessionId)
 
-        // Check if there are uncached turns that could be summarized
+        // Check if anything needs AI summarization
         let actions = ContextMonitor.shared.parseActions(sessionId: sessionId, projectPath: projectPath)
         let hasUncachedActions = entries.contains { entry in
             let turnActions = actions[entry.index] ?? []
             return !turnActions.isEmpty && cachedActionSummaries[entry.index] == nil
         }
-
-        // Check if session summary needs (re)generation
         let cachedTurnCount = SummaryManager.shared.cachedSummaryTurnCount(forSessionId: sessionId)
         let needsSessionSummary = session.summary == nil || cachedTurnCount < entries.count
+        let needsSummarization = needsSessionSummary || hasUncachedActions
 
         timelineController?.showTimeline(
             session: updatedSession,
             entries: enrichedEntries,
             cachedActionSummaries: cachedActionSummaries,
-            showSummarizeButton: needsSessionSummary,
-            showSummarizeActionsButton: hasUncachedActions,
+            showSummarizeButton: needsSummarization,
             scrollToIndex: scrollToMessageIndex
         )
 
-        timelineController?.onSummarizeSession = { [weak self] in
-            self?.summarizeSession(sessionId: sessionId)
-        }
-        timelineController?.onSummarizeActions = { [weak self] in
-            self?.summarizeActions(sessionId: sessionId, entries: entries, actions: actions)
+        timelineController?.onSummarize = { [weak self] in
+            self?.summarizeAll(sessionId: sessionId, entries: entries, actions: actions)
         }
     }
 
-    private func summarizeSession(sessionId: String) {
+    private func summarizeAll(sessionId: String, entries: [TimelineEntry], actions: [Int: [String]]) {
         guard let session = allSessions.first(where: { $0.sessionId == sessionId }) else { return }
-        let turnCount = session.messageCount
 
-        SummaryManager.shared.generateSummary(sessionId: sessionId, projectPath: projectPath, currentTurnCount: turnCount) { [weak self] summary in
-            guard let self else { return }
-            if let idx = self.allSessions.firstIndex(where: { $0.sessionId == sessionId }), let summary {
-                self.allSessions[idx].summary = summary
-                self.applyFilter()
-                if self.selectedSessionId == sessionId {
-                    self.timelineController?.updateHeaderSummary(summary)
-                    self.timelineController?.hideSummarizeSessionButton()
-                }
-            }
-        }
-    }
-
-    private func summarizeActions(sessionId: String, entries: [TimelineEntry], actions: [Int: [String]]) {
+        // Show spinners on uncached action turns
         let cached = SummaryManager.shared.cachedTurnSummaries(forSessionId: sessionId)
         let uncachedTurns = Set(entries.map { $0.index }.filter {
             actions[$0] != nil && !actions[$0]!.isEmpty && cached[$0] == nil
@@ -407,10 +388,25 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         if !uncachedTurns.isEmpty {
             timelineController?.setGeneratingTurns(uncachedTurns)
         }
-        SummaryManager.shared.generateTurnSummaries(sessionId: sessionId, actions: actions) { [weak self] summaries in
+
+        // Single combined AI call for both session summary + action summaries
+        SummaryManager.shared.generateCombinedSummaries(
+            sessionId: sessionId,
+            projectPath: projectPath,
+            currentTurnCount: entries.count,
+            actions: actions
+        ) { [weak self] sessionSummary, actionSummaries in
             guard let self, self.selectedSessionId == sessionId else { return }
-            self.timelineController?.updateActionSummaries(summaries)
-            self.timelineController?.hideSummarizeActionsButton()
+
+            if let summary = sessionSummary,
+               let idx = self.allSessions.firstIndex(where: { $0.sessionId == sessionId }) {
+                self.allSessions[idx].summary = summary
+                self.applyFilter()
+                self.timelineController?.updateHeaderSummary(summary)
+            }
+
+            self.timelineController?.updateActionSummaries(actionSummaries)
+            self.timelineController?.hideSummarizeButton()
         }
     }
 
