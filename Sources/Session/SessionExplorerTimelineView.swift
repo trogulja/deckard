@@ -44,7 +44,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         tableView.headerView = nil
         tableView.dataSource = self
         tableView.delegate = self
-        tableView.rowHeight = 60
+        tableView.usesAutomaticRowHeights = true
         tableView.backgroundColor = .clear
         tableView.selectionHighlightStyle = .none
 
@@ -213,12 +213,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         return makeTimelineCell(entry: entry, isLast: row == entries.count - 1)
     }
 
-    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        guard row < entries.count else { return 60 }
-        let entry = entries[row]
-        let hasExtra = entry.actionSummary != nil || generatingTurnIndices.contains(entry.index)
-        return hasExtra ? 76 : 60
-    }
+    // Row heights are driven by usesAutomaticRowHeights + auto layout constraints
 
     // MARK: - Timeline Cell
 
@@ -276,6 +271,10 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
             field.font = .systemFont(ofSize: 11)
             field.textColor = .secondaryLabelColor
             field.lineBreakMode = .byTruncatingTail
+            field.maximumNumberOfLines = 5
+            field.cell?.wraps = true
+            field.cell?.isScrollable = false
+            field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             field.translatesAutoresizingMaskIntoConstraints = false
             cell.addSubview(field)
             actionField = field
@@ -294,15 +293,20 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
             actionSpinner = nil
         }
 
-        // Fork here button
+        // Fork here button (icon rotated 180° so arrows point down)
         let forkBtn = NSButton(title: "", target: nil, action: nil)
         if let branchImage = NSImage(systemSymbolName: "arrow.branch", accessibilityDescription: "Fork here") {
-            let flipped = NSImage(size: branchImage.size, flipped: true) { rect in
-                branchImage.draw(in: rect)
+            let size = branchImage.size
+            let rotated = NSImage(size: size, flipped: false) { _ in
+                let ctx = NSGraphicsContext.current!.cgContext
+                ctx.translateBy(x: size.width / 2, y: size.height / 2)
+                ctx.rotate(by: .pi)
+                ctx.translateBy(x: -size.width / 2, y: -size.height / 2)
+                branchImage.draw(in: NSRect(origin: .zero, size: size))
                 return true
             }
-            flipped.isTemplate = true
-            forkBtn.image = flipped
+            rotated.isTemplate = true
+            forkBtn.image = rotated
         }
         forkBtn.bezelStyle = .inline
         forkBtn.isBordered = false
@@ -365,6 +369,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
                 actionField.leadingAnchor.constraint(equalTo: msgField.leadingAnchor),
                 actionField.trailingAnchor.constraint(equalTo: starBtn.leadingAnchor, constant: -8),
                 actionField.topAnchor.constraint(equalTo: metaField.bottomAnchor, constant: 1),
+                actionField.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8),
             ])
         } else if let actionSpinner {
             NSLayoutConstraint.activate([
@@ -372,7 +377,10 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
                 actionSpinner.topAnchor.constraint(equalTo: metaField.bottomAnchor, constant: 2),
                 actionSpinner.widthAnchor.constraint(equalToConstant: 14),
                 actionSpinner.heightAnchor.constraint(equalToConstant: 14),
+                actionSpinner.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8),
             ])
+        } else {
+            metaField.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8).isActive = true
         }
 
         return cell

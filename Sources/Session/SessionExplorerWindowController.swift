@@ -361,11 +361,14 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
             scrollToIndex: scrollToMessageIndex
         )
 
-        // Generate action summaries in one batch haiku call, with per-row spinners
+        // Generate action summaries — cached turns load instantly, only new ones hit haiku
         let actions = ContextMonitor.shared.parseActions(sessionId: sessionId, projectPath: projectPath)
-        let turnIndices = Set(entries.map { $0.index }.filter { actions[$0] != nil && !actions[$0]!.isEmpty })
-        if !turnIndices.isEmpty {
-            timelineController?.setGeneratingTurns(turnIndices)
+        let cached = SummaryManager.shared.cachedTurnSummaries(forSessionId: sessionId)
+        let uncachedTurns = Set(entries.map { $0.index }.filter {
+            actions[$0] != nil && !actions[$0]!.isEmpty && cached[$0] == nil
+        })
+        if !uncachedTurns.isEmpty {
+            timelineController?.setGeneratingTurns(uncachedTurns)
         }
         SummaryManager.shared.generateTurnSummaries(sessionId: sessionId, actions: actions) { [weak self] summaries in
             guard let self, self.selectedSessionId == sessionId else { return }

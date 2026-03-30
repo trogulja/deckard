@@ -70,30 +70,66 @@ class SummaryManager {
         }
     }
 
-    /// Generates concise action summaries for all turns in one batch haiku call.
-    /// `actions` maps turn index to a list of raw action descriptions.
-    /// Calls `completion` on the main thread with a dictionary of turn index → summary.
+    // MARK: - Turn Summaries (persisted, incremental)
+
+    struct CachedTurnSummaries: Codable {
+        var summaries: [String: String]  // "turnIndex" → summary (String keys for Codable)
+    }
+
+    private let turnSummariesURL: URL = {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let deckardDir = appSupport.appendingPathComponent("Deckard")
+        try? FileManager.default.createDirectory(at: deckardDir, withIntermediateDirectories: true)
+        return deckardDir.appendingPathComponent("turn-summaries.json")
+    }()
+
+    private var turnSummariesCache: [String: CachedTurnSummaries]?
+
+    /// Returns all cached turn summaries for a session.
+    func cachedTurnSummaries(forSessionId sessionId: String) -> [Int: String] {
+        let all = loadAllTurnSummaries()
+        guard let cached = all[sessionId] else { return [:] }
+        var result: [Int: String] = [:]
+        for (key, value) in cached.summaries {
+            if let idx = Int(key) { result[idx] = value }
+        }
+        return result
+    }
+
+    /// Generates action summaries for turns that don't already have cached summaries.
+    /// Returns cached summaries immediately via `completion`, then generates missing ones
+    /// and calls `completion` again with the full set when done.
+    /// `actions` maps turn index to raw action descriptions. `totalTurnCount` is the current
+    /// number of turns in the session (used to detect continued sessions).
     func generateTurnSummaries(sessionId: String, actions: [Int: [String]], completion: @escaping ([Int: String]) -> Void) {
         let key = "turns-\(sessionId)"
-        guard !inFlightSessionIds.contains(key) else { return }
 
-        // Check cache
-        if let cached = cachedTurnSummaries[sessionId] {
-            completion(cached)
-            return
-        }
+        // Load existing cached summaries
+        let existing = cachedTurnSummaries(forSessionId: sessionId)
 
+        // Figure out which turns need summarization (have actions but no cached summary)
         let nonEmpty = actions.filter { !$0.value.isEmpty }
-        guard !nonEmpty.isEmpty else {
-            completion([:])
+        let needsSummary = nonEmpty.filter { existing[$0.key] == nil }
+
+        // If everything is cached, return immediately
+        if needsSummary.isEmpty {
+            completion(existing)
             return
         }
 
+        // Return what we have so far
+        if !existing.isEmpty {
+            completion(existing)
+        }
+
+        // Don't double-generate
+        guard !inFlightSessionIds.contains(key) else { return }
         inFlightSessionIds.insert(key)
 
+        // Build prompt only for new turns
         var promptLines = ["For each numbered turn below, write a single short sentence (max 10 words) summarizing what was done. Output one line per turn in the format \"N: summary\". No other text.\n"]
-        for turnIndex in nonEmpty.keys.sorted() {
-            let actionList = nonEmpty[turnIndex]!.joined(separator: ", ")
+        for turnIndex in needsSummary.keys.sorted() {
+            let actionList = needsSummary[turnIndex]!.joined(separator: ", ")
             promptLines.append("\(turnIndex): \(actionList)")
         }
         let prompt = promptLines.joined(separator: "\n")
@@ -104,7 +140,7 @@ class SummaryManager {
             DispatchQueue.main.async {
                 self?.inFlightSessionIds.remove(key)
 
-                var summaries: [Int: String] = [:]
+                var newSummaries: [Int: String] = [:]
                 if let output = result {
                     for line in output.components(separatedBy: "\n") {
                         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -113,18 +149,41 @@ class SummaryManager {
                         guard let turnIdx = Int(numStr) else { continue }
                         let summary = trimmed[trimmed.index(after: colonIdx)...].trimmingCharacters(in: .whitespacesAndNewlines)
                         if !summary.isEmpty {
-                            summaries[turnIdx] = summary
+                            newSummaries[turnIdx] = summary
                         }
                     }
                 }
 
-                self?.cachedTurnSummaries[sessionId] = summaries
-                completion(summaries)
+                // Merge with existing and persist
+                let merged = existing.merging(newSummaries) { _, new in new }
+                self?.saveTurnSummaries(sessionId: sessionId, summaries: merged)
+                completion(merged)
             }
         }
     }
 
-    private var cachedTurnSummaries: [String: [Int: String]] = [:]
+    private func loadAllTurnSummaries() -> [String: CachedTurnSummaries] {
+        if let cached = turnSummariesCache { return cached }
+        guard let data = try? Data(contentsOf: turnSummariesURL),
+              let dict = try? JSONDecoder().decode([String: CachedTurnSummaries].self, from: data) else {
+            turnSummariesCache = [:]
+            return [:]
+        }
+        turnSummariesCache = dict
+        return dict
+    }
+
+    private func saveTurnSummaries(sessionId: String, summaries: [Int: String]) {
+        var all = loadAllTurnSummaries()
+        var codable: [String: String] = [:]
+        for (key, value) in summaries { codable[String(key)] = value }
+        all[sessionId] = CachedTurnSummaries(summaries: codable)
+        turnSummariesCache = all
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(all) else { return }
+        try? data.write(to: turnSummariesURL, options: .atomic)
+    }
 
     // MARK: - Private
 
