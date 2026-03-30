@@ -591,6 +591,7 @@ extension DeckardWindowController {
 
         if isInFolder {
             let moveOutItem = NSMenuItem(title: "Move Out of Folder", action: #selector(moveProjectOutOfFolderAction(_:)), keyEquivalent: "")
+            moveOutItem.setShortcut(for: .moveOutOfFolder)
             moveOutItem.target = self
             moveOutItem.representedObject = project
             menu.addItem(moveOutItem)
@@ -610,6 +611,7 @@ extension DeckardWindowController {
         menu.addItem(.separator())
 
         let newFolderItem = NSMenuItem(title: "New Folder", action: #selector(newFolderMenuAction), keyEquivalent: "")
+        newFolderItem.setShortcut(for: .newSidebarFolder)
         newFolderItem.target = self
         menu.addItem(newFolderItem)
 

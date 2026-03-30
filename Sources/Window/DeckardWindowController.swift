@@ -482,6 +482,12 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         exploreSessionsMenuAction(fakeMenuItem)
     }
 
+    func moveCurrentProjectOutOfFolder() {
+        guard selectedProjectIndex >= 0, selectedProjectIndex < projects.count else { return }
+        let project = projects[selectedProjectIndex]
+        moveProjectOutOfFolder(projectId: project.id)
+    }
+
     func closeProject(at index: Int) {
         guard index >= 0, index < projects.count else { return }
         let project = projects[index]
