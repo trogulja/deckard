@@ -1,7 +1,7 @@
 import Foundation
 
 /// Manages session bookmarks persisted to ~/Library/Application Support/Deckard/session-bookmarks.json.
-/// Bookmarks are keyed by the encoded project path (matching Claude Code's convention).
+/// Stores a set of bookmarked session IDs per project path.
 class BookmarkManager {
     static let shared = BookmarkManager()
 
@@ -12,65 +12,46 @@ class BookmarkManager {
         return deckardDir.appendingPathComponent("session-bookmarks.json")
     }()
 
-    private var cache: [String: [SessionBookmark]]?
+    private var cache: [String: [String]]?  // projectKey -> [sessionId]
 
-    /// Returns all bookmarks for a given project path.
-    func bookmarks(forProjectPath projectPath: String) -> [SessionBookmark] {
+    /// Returns all bookmarked session IDs for a project.
+    func bookmarkedSessionIds(forProjectPath projectPath: String) -> Set<String> {
         let all = loadAll()
         let key = projectPath.claudeProjectDirName
-        return all[key] ?? []
+        return Set(all[key] ?? [])
     }
 
-    /// Adds a bookmark. Returns the created bookmark.
+    /// Checks if a session is bookmarked.
+    func isBookmarked(projectPath: String, sessionId: String) -> Bool {
+        bookmarkedSessionIds(forProjectPath: projectPath).contains(sessionId)
+    }
+
+    /// Toggles the bookmark state for a session. Returns the new state.
     @discardableResult
-    func addBookmark(projectPath: String, sessionId: String, messageIndex: Int, label: String) -> SessionBookmark {
+    func toggleBookmark(projectPath: String, sessionId: String) -> Bool {
         var all = loadAll()
         let key = projectPath.claudeProjectDirName
-        var projectBookmarks = all[key] ?? []
+        var ids = all[key] ?? []
 
-        let bookmark = SessionBookmark(
-            sessionId: sessionId,
-            messageIndex: messageIndex,
-            label: label,
-            createdAt: Date()
-        )
-        projectBookmarks.append(bookmark)
-        all[key] = projectBookmarks
-        saveAll(all)
-        return bookmark
-    }
-
-    /// Removes a bookmark matching sessionId + messageIndex.
-    func removeBookmark(projectPath: String, sessionId: String, messageIndex: Int) {
-        var all = loadAll()
-        let key = projectPath.claudeProjectDirName
-        guard var projectBookmarks = all[key] else { return }
-
-        projectBookmarks.removeAll { $0.sessionId == sessionId && $0.messageIndex == messageIndex }
-        all[key] = projectBookmarks
-        saveAll(all)
-    }
-
-    /// Checks if a specific point is bookmarked.
-    func isBookmarked(projectPath: String, sessionId: String, messageIndex: Int) -> Bool {
-        let bookmarks = bookmarks(forProjectPath: projectPath)
-        return bookmarks.contains { $0.sessionId == sessionId && $0.messageIndex == messageIndex }
-    }
-
-    /// Returns the bookmark label for a specific point, or nil.
-    func bookmarkLabel(projectPath: String, sessionId: String, messageIndex: Int) -> String? {
-        let bookmarks = bookmarks(forProjectPath: projectPath)
-        return bookmarks.first(where: { $0.sessionId == sessionId && $0.messageIndex == messageIndex })?.label
+        if let idx = ids.firstIndex(of: sessionId) {
+            ids.remove(at: idx)
+            all[key] = ids
+            saveAll(all)
+            return false
+        } else {
+            ids.append(sessionId)
+            all[key] = ids
+            saveAll(all)
+            return true
+        }
     }
 
     // MARK: - Private
 
-    private func loadAll() -> [String: [SessionBookmark]] {
+    private func loadAll() -> [String: [String]] {
         if let cached = cache { return cached }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
         guard let data = try? Data(contentsOf: fileURL),
-              let dict = try? decoder.decode([String: [SessionBookmark]].self, from: data) else {
+              let dict = try? JSONDecoder().decode([String: [String]].self, from: data) else {
             cache = [:]
             return [:]
         }
@@ -78,11 +59,10 @@ class BookmarkManager {
         return dict
     }
 
-    private func saveAll(_ dict: [String: [SessionBookmark]]) {
+    private func saveAll(_ dict: [String: [String]]) {
         cache = dict
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(dict) else { return }
         try? data.write(to: fileURL, options: .atomic)
     }

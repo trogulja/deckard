@@ -9,6 +9,7 @@ struct ExplorerSessionInfo {
     let firstUserMessage: String
     var savedName: String?
     var summary: String?
+    var isBookmarked: Bool
 }
 
 /// A single user turn within a session timeline.
@@ -17,15 +18,5 @@ struct TimelineEntry {
     let promptId: String
     let message: String
     let timestamp: Date?
-    var isBookmarked: Bool
-    var bookmarkLabel: String?
     var actionSummary: String?
-}
-
-/// A starred point in a conversation, persisted to disk.
-struct SessionBookmark: Codable {
-    let sessionId: String
-    let messageIndex: Int
-    let label: String
-    let createdAt: Date
 }

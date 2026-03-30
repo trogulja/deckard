@@ -16,7 +16,6 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
     var onResume: ((String) -> Void)?
     var onFork: ((String) -> Void)?
     var onForkAtPoint: ((String, Int) -> Void)?
-    var onBookmarkToggle: ((String, TimelineEntry) -> Void)?
     var onSummarize: (() -> Void)?
 
     private var summarizeBtn: NSButton?
@@ -125,22 +124,6 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         } else {
             summarizeSpinner?.removeFromSuperview()
             summarizeSpinner = nil
-        }
-        tableView.reloadData()
-    }
-
-    func reloadBookmarkState(projectPath: String, sessionId: String) {
-        for i in 0..<entries.count {
-            entries[i].isBookmarked = BookmarkManager.shared.isBookmarked(
-                projectPath: projectPath,
-                sessionId: sessionId,
-                messageIndex: entries[i].index
-            )
-            entries[i].bookmarkLabel = BookmarkManager.shared.bookmarkLabel(
-                projectPath: projectPath,
-                sessionId: sessionId,
-                messageIndex: entries[i].index
-            )
         }
         tableView.reloadData()
     }
@@ -302,20 +285,14 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         // Dot
         let dot = NSView()
         dot.wantsLayer = true
-        let dotColor = entry.isBookmarked
-            ? NSColor(red: 1.0, green: 0.8, blue: 0.2, alpha: 0.7)
-            : NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 0.7)
+        let dotColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 0.7)
         dot.layer?.backgroundColor = dotColor.cgColor
         dot.layer?.cornerRadius = 5
         dot.translatesAutoresizingMaskIntoConstraints = false
         cell.addSubview(dot)
 
         // Message text
-        var messageText = entry.message
-        if let label = entry.bookmarkLabel {
-            messageText += "  \u{2605} \(label)"
-        }
-        let msgField = NSTextField(labelWithString: messageText)
+        let msgField = NSTextField(labelWithString: entry.message)
         msgField.font = .systemFont(ofSize: 12)
         msgField.textColor = .labelColor
         msgField.lineBreakMode = .byTruncatingTail
@@ -382,20 +359,6 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         forkBtn.translatesAutoresizingMaskIntoConstraints = false
         cell.addSubview(forkBtn)
 
-        // Star toggle
-        let starBtn = NSButton(title: entry.isBookmarked ? "\u{2605}" : "\u{2606}", target: nil, action: nil)
-        starBtn.bezelStyle = .inline
-        starBtn.font = .systemFont(ofSize: 13)
-        starBtn.isBordered = false
-        starBtn.contentTintColor = entry.isBookmarked
-            ? NSColor(red: 1.0, green: 0.8, blue: 0.2, alpha: 0.7)
-            : NSColor.tertiaryLabelColor
-        starBtn.tag = entry.index
-        starBtn.target = self
-        starBtn.action = #selector(starClicked(_:))
-        starBtn.translatesAutoresizingMaskIntoConstraints = false
-        cell.addSubview(starBtn)
-
         NSLayoutConstraint.activate([
             // Vertical line
             line.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 24),
@@ -411,7 +374,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
 
             // Message
             msgField.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 12),
-            msgField.trailingAnchor.constraint(equalTo: starBtn.leadingAnchor, constant: -8),
+            msgField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -16),
             msgField.topAnchor.constraint(equalTo: dot.topAnchor, constant: -2),
 
             // Meta
@@ -421,17 +384,12 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
             // Fork here
             forkBtn.leadingAnchor.constraint(equalTo: metaField.trailingAnchor, constant: 8),
             forkBtn.centerYAnchor.constraint(equalTo: metaField.centerYAnchor),
-
-            // Star
-            starBtn.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -16),
-            starBtn.topAnchor.constraint(equalTo: cell.topAnchor, constant: 12),
-            starBtn.widthAnchor.constraint(equalToConstant: 24),
         ])
 
         if let actionField {
             NSLayoutConstraint.activate([
                 actionField.leadingAnchor.constraint(equalTo: msgField.leadingAnchor),
-                actionField.trailingAnchor.constraint(equalTo: starBtn.leadingAnchor, constant: -8),
+                actionField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -16),
                 actionField.topAnchor.constraint(equalTo: metaField.bottomAnchor, constant: 1),
                 actionField.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8),
             ])
@@ -447,9 +405,4 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         onForkAtPoint?(session.sessionId, sender.tag)
     }
 
-    @objc private func starClicked(_ sender: NSButton) {
-        guard let session = currentSession, sender.tag < entries.count else { return }
-        let entry = entries[sender.tag]
-        onBookmarkToggle?(session.sessionId, entry)
-    }
 }

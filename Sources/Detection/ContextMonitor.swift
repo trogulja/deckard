@@ -149,8 +149,6 @@ class ContextMonitor {
                 promptId: promptId,
                 message: text.trimmingCharacters(in: .whitespacesAndNewlines),
                 timestamp: timestamp,
-                isBookmarked: false,
-                bookmarkLabel: nil,
                 actionSummary: nil
             ))
         }

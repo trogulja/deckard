@@ -1,7 +1,7 @@
 import AppKit
 
 /// Displays all Claude Code sessions for a project in a dedicated window.
-/// Left pane: search + bookmarks + session list. Right pane: conversation timeline.
+/// Left pane: search + session list with star toggles. Right pane: conversation timeline.
 class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, NSSearchFieldDelegate {
 
     private let projectPath: String
@@ -14,9 +14,8 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
     // --- Data ---
     private var allSessions: [ExplorerSessionInfo] = []
     private var filteredSessions: [ExplorerSessionInfo] = []
-    private var bookmarks: [SessionBookmark] = []
-    private var filteredBookmarks: [SessionBookmark] = []
     private var selectedSessionId: String?
+    private var showFavoritesOnly = false
 
     // --- UI ---
     private let splitView = NSSplitView()
@@ -70,7 +69,6 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
     private func setupUI() {
         guard let contentView = window?.contentView else { return }
 
-        // Split view
         splitView.isVertical = true
         splitView.dividerStyle = .thin
         splitView.delegate = self
@@ -83,11 +81,9 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
             splitView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
         ])
 
-        // Left pane
         setupLeftPane()
         splitView.addSubview(leftPane)
 
-        // Right pane
         setupRightPane()
         splitView.addSubview(rightPane)
 
@@ -97,7 +93,6 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
     private func setupLeftPane() {
         leftPane.translatesAutoresizingMaskIntoConstraints = false
 
-        // Search field
         searchField.placeholderString = "Search sessions..."
         searchField.translatesAutoresizingMaskIntoConstraints = false
         searchField.delegate = self
@@ -105,7 +100,14 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         searchField.sendsWholeSearchString = false
         leftPane.addSubview(searchField)
 
-        // Table view
+        let favBtn = NSButton(title: "", target: self, action: #selector(toggleFavoritesFilter))
+        favBtn.image = NSImage(systemSymbolName: "star", accessibilityDescription: "Show favorites only")
+        favBtn.bezelStyle = .inline
+        favBtn.isBordered = false
+        favBtn.toolTip = "Show favorites only"
+        favBtn.translatesAutoresizingMaskIntoConstraints = false
+        leftPane.addSubview(favBtn)
+
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("session"))
         column.title = ""
         listTableView.addTableColumn(column)
@@ -127,7 +129,11 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         NSLayoutConstraint.activate([
             searchField.topAnchor.constraint(equalTo: leftPane.topAnchor, constant: 8),
             searchField.leadingAnchor.constraint(equalTo: leftPane.leadingAnchor, constant: 8),
-            searchField.trailingAnchor.constraint(equalTo: leftPane.trailingAnchor, constant: -8),
+            searchField.trailingAnchor.constraint(equalTo: favBtn.leadingAnchor, constant: -4),
+
+            favBtn.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
+            favBtn.trailingAnchor.constraint(equalTo: leftPane.trailingAnchor, constant: -8),
+            favBtn.widthAnchor.constraint(equalToConstant: 24),
 
             listScrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 8),
             listScrollView.leadingAnchor.constraint(equalTo: leftPane.leadingAnchor),
@@ -148,9 +154,6 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         timelineController?.onForkAtPoint = { [weak self] sessionId, turnIndex in
             self?.performForkAtPoint(sessionId: sessionId, turnIndex: turnIndex)
         }
-        timelineController?.onBookmarkToggle = { [weak self] sessionId, entry in
-            self?.toggleBookmark(sessionId: sessionId, entry: entry)
-        }
     }
 
     // MARK: - Data Loading
@@ -158,6 +161,7 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
     private func loadData() {
         let rawSessions = ContextMonitor.shared.listSessions(forProjectPath: projectPath)
         let savedNames = SessionManager.shared.loadSessionNames()
+        let bookmarkedIds = BookmarkManager.shared.bookmarkedSessionIds(forProjectPath: projectPath)
 
         allSessions = rawSessions.map { session in
             let name = savedNames[session.sessionId]
@@ -168,32 +172,41 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
                 messageCount: session.messageCount,
                 firstUserMessage: session.firstUserMessage,
                 savedName: (name?.isEmpty == false) ? name : nil,
-                summary: SummaryManager.shared.cachedSummary(forSessionId: session.sessionId)
+                summary: SummaryManager.shared.cachedSummary(forSessionId: session.sessionId),
+                isBookmarked: bookmarkedIds.contains(session.sessionId)
             )
         }
 
-        bookmarks = BookmarkManager.shared.bookmarks(forProjectPath: projectPath)
-            .sorted { $0.createdAt < $1.createdAt }
+        applyFilter()
+    }
 
+    @objc private func toggleFavoritesFilter(_ sender: NSButton) {
+        showFavoritesOnly.toggle()
+        sender.contentTintColor = showFavoritesOnly
+            ? NSColor(red: 1.0, green: 0.8, blue: 0.2, alpha: 0.9)
+            : nil
+        sender.image = NSImage(systemSymbolName: showFavoritesOnly ? "star.fill" : "star", accessibilityDescription: "Show favorites only")
         applyFilter()
     }
 
     private func applyFilter() {
         let query = searchField.stringValue.lowercased()
-        if query.isEmpty {
-            filteredSessions = allSessions
-            filteredBookmarks = bookmarks
-        } else {
-            filteredSessions = allSessions.filter {
+        var sessions = allSessions
+
+        if showFavoritesOnly {
+            sessions = sessions.filter { $0.isBookmarked }
+        }
+
+        if !query.isEmpty {
+            sessions = sessions.filter {
                 ($0.savedName ?? "").lowercased().contains(query) ||
                 ($0.summary ?? "").lowercased().contains(query) ||
                 $0.firstUserMessage.lowercased().contains(query)
             }
-            filteredBookmarks = bookmarks.filter {
-                $0.label.lowercased().contains(query)
-            }
         }
-        // Preserve selection across reload
+
+        filteredSessions = sessions
+
         let previousSelection = selectedSessionId
         listTableView.reloadData()
         if let prevId = previousSelection {
@@ -201,20 +214,15 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         }
     }
 
-    /// Restores the list selection to match the given sessionId.
     private func restoreListSelection(sessionId: String) {
-        let bookmarkCount = filteredBookmarks.count
-        let hasDivider = bookmarkCount > 0
-        let offset = bookmarkCount + (hasDivider ? 1 : 0)
         if let idx = filteredSessions.firstIndex(where: { $0.sessionId == sessionId }) {
-            listTableView.selectRowIndexes(IndexSet(integer: offset + idx), byExtendingSelection: false)
+            listTableView.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
         }
     }
 
     // MARK: - Actions
 
     private func sessionDisplayName(for sessionId: String) -> String? {
-        // Prefer saved session name (from tab rename), then first user message
         let savedNames = SessionManager.shared.loadSessionNames()
         if let name = savedNames[sessionId], !name.isEmpty { return name }
         guard let session = allSessions.first(where: { $0.sessionId == sessionId }) else { return nil }
@@ -239,57 +247,13 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         close()
     }
 
-    private func toggleBookmark(sessionId: String, entry: TimelineEntry) {
-        if entry.isBookmarked {
-            BookmarkManager.shared.removeBookmark(
-                projectPath: projectPath,
-                sessionId: sessionId,
-                messageIndex: entry.index
-            )
-        } else {
-            promptForBookmarkLabel(defaultLabel: String(entry.message.prefix(60))) { [weak self] label in
-                guard let self, let label else { return }
-                BookmarkManager.shared.addBookmark(
-                    projectPath: self.projectPath,
-                    sessionId: sessionId,
-                    messageIndex: entry.index,
-                    label: label
-                )
-                self.loadData()
-                self.timelineController?.reloadBookmarkState(
-                    projectPath: self.projectPath,
-                    sessionId: sessionId
-                )
-            }
-            return
+    @objc private func starClicked(_ sender: NSButton) {
+        let sessionId = filteredSessions[sender.tag].sessionId
+        let newState = BookmarkManager.shared.toggleBookmark(projectPath: projectPath, sessionId: sessionId)
+        if let idx = allSessions.firstIndex(where: { $0.sessionId == sessionId }) {
+            allSessions[idx].isBookmarked = newState
         }
-        loadData()
-        timelineController?.reloadBookmarkState(projectPath: projectPath, sessionId: sessionId)
-    }
-
-    private func promptForBookmarkLabel(defaultLabel: String, completion: @escaping (String?) -> Void) {
-        guard let window else {
-            completion(nil)
-            return
-        }
-        let alert = NSAlert()
-        alert.messageText = "Bookmark Label"
-        alert.informativeText = "Enter a name for this bookmark:"
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        input.stringValue = defaultLabel
-        alert.accessoryView = input
-
-        alert.beginSheetModal(for: window) { response in
-            if response == .alertFirstButtonReturn {
-                let label = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                completion(label.isEmpty ? defaultLabel : label)
-            } else {
-                completion(nil)
-            }
-        }
+        applyFilter()
     }
 
     // MARK: - Search
@@ -304,21 +268,9 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
 
     @objc private func listRowClicked() {
         let row = listTableView.selectedRow
-        guard row >= 0 else { return }
-
-        let bookmarkCount = filteredBookmarks.count
-        let hasDivider = bookmarkCount > 0
-
-        if row < bookmarkCount {
-            // Clicked a bookmark -- select its parent session and scroll to message
-            let bookmark = filteredBookmarks[row]
-            selectSession(sessionId: bookmark.sessionId, scrollToMessageIndex: bookmark.messageIndex)
-        } else {
-            let sessionIndex = row - bookmarkCount - (hasDivider ? 1 : 0)
-            guard sessionIndex >= 0, sessionIndex < filteredSessions.count else { return }
-            let session = filteredSessions[sessionIndex]
-            selectSession(sessionId: session.sessionId, scrollToMessageIndex: nil)
-        }
+        guard row >= 0, row < filteredSessions.count else { return }
+        let session = filteredSessions[row]
+        selectSession(sessionId: session.sessionId, scrollToMessageIndex: nil)
     }
 
     private func selectSession(sessionId: String, scrollToMessageIndex: Int?) {
@@ -327,34 +279,14 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
 
         let entries = ContextMonitor.shared.parseTimeline(sessionId: sessionId, projectPath: projectPath)
 
-        // Update message count now that we've parsed the full file
         if let idx = allSessions.firstIndex(where: { $0.sessionId == sessionId }) {
             allSessions[idx].messageCount = entries.count
         }
 
-        // Use the session with updated messageCount for the timeline header
         let updatedSession = allSessions.first(where: { $0.sessionId == sessionId }) ?? session
 
-        // Enrich entries with bookmark state
-        let enrichedEntries = entries.map { entry -> TimelineEntry in
-            var e = entry
-            e.isBookmarked = BookmarkManager.shared.isBookmarked(
-                projectPath: projectPath,
-                sessionId: sessionId,
-                messageIndex: entry.index
-            )
-            e.bookmarkLabel = BookmarkManager.shared.bookmarkLabel(
-                projectPath: projectPath,
-                sessionId: sessionId,
-                messageIndex: entry.index
-            )
-            return e
-        }
-
-        // Load cached action summaries (no AI call — just what we already have)
         let cachedActionSummaries = SummaryManager.shared.cachedTurnSummaries(forSessionId: sessionId)
 
-        // Check if anything needs AI summarization
         let actions = ContextMonitor.shared.parseActions(sessionId: sessionId, projectPath: projectPath)
         let hasUncachedActions = entries.contains { entry in
             let turnActions = actions[entry.index] ?? []
@@ -366,7 +298,7 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
 
         timelineController?.showTimeline(
             session: updatedSession,
-            entries: enrichedEntries,
+            entries: entries,
             cachedActionSummaries: cachedActionSummaries,
             summarizeEnabled: summarizeEnabled,
             scrollToIndex: scrollToMessageIndex
@@ -394,7 +326,6 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
                 self.applyFilter()
             }
 
-            // Rebuild the entire right pane with updated data
             self.selectSession(sessionId: sessionId, scrollToMessageIndex: nil)
         }
     }
@@ -414,118 +345,36 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
 
 extension SessionExplorerWindowController: NSTableViewDataSource, NSTableViewDelegate {
 
-    /// Total rows = bookmarks + (divider if bookmarks exist) + sessions
     func numberOfRows(in tableView: NSTableView) -> Int {
-        let bookmarkCount = filteredBookmarks.count
-        let divider = bookmarkCount > 0 ? 1 : 0
-        return bookmarkCount + divider + filteredSessions.count
+        filteredSessions.count
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let bookmarkCount = filteredBookmarks.count
-        let hasDivider = bookmarkCount > 0
+        guard row < filteredSessions.count else { return nil }
+        return makeSessionCell(session: filteredSessions[row], row: row)
+    }
 
-        if row < bookmarkCount {
-            // Bookmark row
-            let bookmark = filteredBookmarks[row]
-            let sessionSummary = allSessions.first(where: { $0.sessionId == bookmark.sessionId })
-            return makeBookmarkCell(bookmark: bookmark, sessionSummary: sessionSummary?.summary ?? sessionSummary?.firstUserMessage ?? "")
-        } else if hasDivider && row == bookmarkCount {
-            // Divider row
-            return makeDividerCell()
-        } else {
-            // Session row
-            let sessionIndex = row - bookmarkCount - (hasDivider ? 1 : 0)
-            guard sessionIndex >= 0, sessionIndex < filteredSessions.count else { return nil }
-            let session = filteredSessions[sessionIndex]
-            return makeSessionCell(session: session)
+    private func makeSessionCell(session: ExplorerSessionInfo, row: Int) -> NSView {
+        let cell = NSTableCellView()
+
+        if session.isBookmarked {
+            cell.wantsLayer = true
+            cell.layer?.backgroundColor = NSColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 0.06).cgColor
         }
-    }
 
-    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        let bookmarkCount = filteredBookmarks.count
-        let hasDivider = bookmarkCount > 0
-        if hasDivider && row == bookmarkCount { return 16 }  // divider
-        return 64
-    }
+        // Star toggle
+        let starBtn = NSButton(title: session.isBookmarked ? "\u{2605}" : "\u{2606}", target: self, action: #selector(starClicked(_:)))
+        starBtn.bezelStyle = .inline
+        starBtn.isBordered = false
+        starBtn.font = .systemFont(ofSize: 14)
+        starBtn.contentTintColor = session.isBookmarked
+            ? NSColor(red: 1.0, green: 0.8, blue: 0.2, alpha: 0.7)
+            : NSColor.tertiaryLabelColor
+        starBtn.tag = row
+        starBtn.translatesAutoresizingMaskIntoConstraints = false
+        cell.addSubview(starBtn)
 
-    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        // Don't allow selecting the divider
-        let bookmarkCount = filteredBookmarks.count
-        let hasDivider = bookmarkCount > 0
-        if hasDivider && row == bookmarkCount { return false }
-        return true
-    }
-
-    // MARK: - Cell Factories
-
-    private func makeBookmarkCell(bookmark: SessionBookmark, sessionSummary: String) -> NSView {
-        let cell = NSTableCellView()
-        cell.wantsLayer = true
-        cell.layer?.backgroundColor = NSColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 0.08).cgColor
-        cell.layer?.cornerRadius = 4
-
-        let star = NSTextField(labelWithString: "\u{2605}")
-        star.font = .systemFont(ofSize: 12)
-        star.textColor = NSColor(red: 1.0, green: 0.8, blue: 0.2, alpha: 0.7)
-        star.translatesAutoresizingMaskIntoConstraints = false
-
-        let title = NSTextField(labelWithString: bookmark.label)
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
-        title.textColor = .labelColor
-        title.lineBreakMode = .byWordWrapping
-        title.maximumNumberOfLines = 2
-        title.preferredMaxLayoutWidth = 200
-        title.cell?.wraps = true
-        title.cell?.isScrollable = false
-        title.translatesAutoresizingMaskIntoConstraints = false
-        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let subtitle = NSTextField(labelWithString: "\(sessionSummary) \u{00B7} msg \(bookmark.messageIndex + 1)")
-        subtitle.font = .systemFont(ofSize: 11)
-        subtitle.textColor = .secondaryLabelColor
-        subtitle.lineBreakMode = .byTruncatingTail
-        subtitle.translatesAutoresizingMaskIntoConstraints = false
-
-        cell.addSubview(star)
-        cell.addSubview(title)
-        cell.addSubview(subtitle)
-
-        NSLayoutConstraint.activate([
-            star.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
-            star.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-
-            title.leadingAnchor.constraint(equalTo: star.trailingAnchor, constant: 4),
-            title.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
-            title.topAnchor.constraint(equalTo: cell.topAnchor, constant: 8),
-
-            subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            subtitle.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
-            subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
-            subtitle.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8),
-        ])
-
-        return cell
-    }
-
-    private func makeDividerCell() -> NSView {
-        let cell = NSView()
-        let line = NSBox()
-        line.boxType = .separator
-        line.translatesAutoresizingMaskIntoConstraints = false
-        cell.addSubview(line)
-        NSLayoutConstraint.activate([
-            line.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
-            line.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
-            line.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-        ])
-        return cell
-    }
-
-    private func makeSessionCell(session: ExplorerSessionInfo) -> NSView {
-        let cell = NSTableCellView()
-
-        // Saved name as title, falling back to first user message
+        // Title
         let title = NSTextField(labelWithString: session.savedName ?? session.firstUserMessage)
         title.font = .systemFont(ofSize: 13, weight: session.sessionId == selectedSessionId ? .semibold : .regular)
         title.textColor = .labelColor
@@ -536,8 +385,18 @@ extension SessionExplorerWindowController: NSTableViewDataSource, NSTableViewDel
         title.cell?.isScrollable = false
         title.translatesAutoresizingMaskIntoConstraints = false
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        cell.addSubview(title)
 
-        // AI-generated summary below the title
+        // Timestamp + message count
+        let timeStr = relativeFormatter.localizedString(for: session.modificationDate, relativeTo: Date())
+        let metaText = session.messageCount > 0 ? "\(timeStr) \u{00B7} \(session.messageCount) msgs" : timeStr
+        let metaField = NSTextField(labelWithString: metaText)
+        metaField.font = .systemFont(ofSize: 10)
+        metaField.textColor = .tertiaryLabelColor
+        metaField.translatesAutoresizingMaskIntoConstraints = false
+        cell.addSubview(metaField)
+
+        // AI summary
         let summaryField: NSTextField?
         if let summary = session.summary {
             let field = NSTextField(labelWithString: summary)
@@ -549,56 +408,34 @@ extension SessionExplorerWindowController: NSTableViewDataSource, NSTableViewDel
             field.cell?.isScrollable = false
             field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             field.translatesAutoresizingMaskIntoConstraints = false
+            cell.addSubview(field)
             summaryField = field
         } else {
             summaryField = nil
         }
 
-        // Timestamp + message count
-        let timeStr = relativeFormatter.localizedString(for: session.modificationDate, relativeTo: Date())
-        let metaText = session.messageCount > 0 ? "\(timeStr) \u{00B7} \(session.messageCount) msgs" : timeStr
-        let metaField = NSTextField(labelWithString: metaText)
-        metaField.font = .systemFont(ofSize: 10)
-        metaField.textColor = .tertiaryLabelColor
-        metaField.translatesAutoresizingMaskIntoConstraints = false
-
-        // Spinner for summary generation
-        let spinner = NSProgressIndicator()
-        spinner.style = .spinning
-        spinner.controlSize = .small
-        spinner.translatesAutoresizingMaskIntoConstraints = false
-        spinner.isHidden = !SummaryManager.shared.isGenerating(sessionId: session.sessionId)
-        if !spinner.isHidden { spinner.startAnimation(nil) }
-
-        cell.addSubview(title)
-        cell.addSubview(metaField)
-        if let summaryField { cell.addSubview(summaryField) }
-        cell.addSubview(spinner)
-
-        // Bottom anchor: summary if present, otherwise meta
         let bottomView: NSView = summaryField ?? metaField
 
         NSLayoutConstraint.activate([
-            title.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
-            title.trailingAnchor.constraint(equalTo: spinner.leadingAnchor, constant: -4),
+            starBtn.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
+            starBtn.topAnchor.constraint(equalTo: cell.topAnchor, constant: 8),
+            starBtn.widthAnchor.constraint(equalToConstant: 20),
+
+            title.leadingAnchor.constraint(equalTo: starBtn.trailingAnchor, constant: 2),
+            title.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
             title.topAnchor.constraint(equalTo: cell.topAnchor, constant: 8),
 
             metaField.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            metaField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
+            metaField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
             metaField.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
 
             bottomView.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8),
-
-            spinner.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
-            spinner.topAnchor.constraint(equalTo: cell.topAnchor, constant: 8),
-            spinner.widthAnchor.constraint(equalToConstant: 16),
-            spinner.heightAnchor.constraint(equalToConstant: 16),
         ])
 
         if let summaryField {
             NSLayoutConstraint.activate([
                 summaryField.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-                summaryField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
+                summaryField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
                 summaryField.topAnchor.constraint(equalTo: metaField.bottomAnchor, constant: 2),
             ])
         }
