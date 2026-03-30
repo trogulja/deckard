@@ -62,6 +62,8 @@
 		SE000001SE000001SE000001 /* SessionExplorerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE000002SE000002SE000002 /* SessionExplorerModels.swift */; };
 		SE000003SE000003SE000003 /* BookmarkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE000004SE000004SE000004 /* BookmarkManager.swift */; };
 		SE000005SE000005SE000005 /* SummaryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE000006SE000006SE000006 /* SummaryManager.swift */; };
+		SE000007SE000007SE000007 /* SessionExplorerWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE000008SE000008SE000008 /* SessionExplorerWindowController.swift */; };
+		SE000009SE000009SE000009 /* SessionExplorerTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE00000ASE00000ASE00000A /* SessionExplorerTimelineView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -120,6 +122,8 @@
 		SE000002SE000002SE000002 /* SessionExplorerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExplorerModels.swift; sourceTree = "<group>"; };
 		SE000004SE000004SE000004 /* BookmarkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkManager.swift; sourceTree = "<group>"; };
 		SE000006SE000006SE000006 /* SummaryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryManager.swift; sourceTree = "<group>"; };
+		SE000008SE000008SE000008 /* SessionExplorerWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExplorerWindowController.swift; sourceTree = "<group>"; };
+		SE00000ASE00000ASE00000A /* SessionExplorerTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExplorerTimelineView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -220,6 +224,8 @@
 				SE000002SE000002SE000002 /* SessionExplorerModels.swift */,
 				SE000004SE000004SE000004 /* BookmarkManager.swift */,
 				SE000006SE000006SE000006 /* SummaryManager.swift */,
+				SE000008SE000008SE000008 /* SessionExplorerWindowController.swift */,
+				SE00000ASE00000ASE00000A /* SessionExplorerTimelineView.swift */,
 			);
 			path = Session;
 			sourceTree = "<group>";
@@ -433,6 +439,8 @@
 				SE000001SE000001SE000001 /* SessionExplorerModels.swift in Sources */,
 				SE000003SE000003SE000003 /* BookmarkManager.swift in Sources */,
 				SE000005SE000005SE000005 /* SummaryManager.swift in Sources */,
+				SE000007SE000007SE000007 /* SessionExplorerWindowController.swift in Sources */,
+				SE000009SE000009SE000009 /* SessionExplorerTimelineView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
