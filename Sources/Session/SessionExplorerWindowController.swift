@@ -361,14 +361,27 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
             scrollToIndex: scrollToMessageIndex
         )
 
-        // Generate action summaries for each turn
+        // Generate action summaries one at a time, top to bottom
         let actions = ContextMonitor.shared.parseActions(sessionId: sessionId, projectPath: projectPath)
-        if !actions.isEmpty {
-            timelineController?.showActionSummaryProgress()
+        let turnIndices = entries.map { $0.index }.filter { actions[$0] != nil && !actions[$0]!.isEmpty }
+        generateNextTurnSummary(sessionId: sessionId, turnIndices: turnIndices, actions: actions, position: 0)
+    }
+
+    private func generateNextTurnSummary(sessionId: String, turnIndices: [Int], actions: [Int: [String]], position: Int) {
+        guard position < turnIndices.count, selectedSessionId == sessionId else {
+            timelineController?.setGeneratingTurn(nil)
+            return
         }
-        SummaryManager.shared.generateTurnSummaries(sessionId: sessionId, actions: actions) { [weak self] summaries in
+
+        let turnIndex = turnIndices[position]
+        let turnActions = actions[turnIndex] ?? []
+
+        timelineController?.setGeneratingTurn(turnIndex)
+
+        SummaryManager.shared.generateSingleTurnSummary(sessionId: sessionId, turnIndex: turnIndex, actions: turnActions) { [weak self] summary in
             guard let self, self.selectedSessionId == sessionId else { return }
-            self.timelineController?.updateActionSummaries(summaries)
+            self.timelineController?.updateActionSummary(turnIndex: turnIndex, summary: summary)
+            self.generateNextTurnSummary(sessionId: sessionId, turnIndices: turnIndices, actions: actions, position: position + 1)
         }
     }
 
