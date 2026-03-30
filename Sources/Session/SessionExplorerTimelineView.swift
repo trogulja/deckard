@@ -6,6 +6,8 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
     private let containerView: NSView
     private var headerView: NSView?
     private var headerTitleField: NSTextField?
+    private var headerSummaryField: NSTextField?
+    private var headerSummaryBottomConstraint: NSLayoutConstraint?
     private let scrollView = NSScrollView()
     private let tableView = NSTableView()
 
@@ -106,9 +108,45 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         }
     }
 
-    /// Updates the header title with a new summary.
+    /// Adds or updates the AI summary below the subtitle in the header.
     func updateHeaderSummary(_ summary: String) {
-        headerTitleField?.stringValue = summary
+        if let existing = headerSummaryField {
+            existing.stringValue = summary
+            return
+        }
+
+        guard let header = headerView, let titleField = headerTitleField else { return }
+
+        let field = NSTextField(labelWithString: summary)
+        field.font = .systemFont(ofSize: 12)
+        field.textColor = .secondaryLabelColor
+        field.lineBreakMode = .byTruncatingTail
+        field.maximumNumberOfLines = 5
+        field.cell?.wraps = true
+        field.cell?.isScrollable = false
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        field.translatesAutoresizingMaskIntoConstraints = false
+        header.addSubview(field)
+        headerSummaryField = field
+
+        // Find the subtitle (second text field after title)
+        let subtitleField = header.subviews.compactMap { $0 as? NSTextField }.first(where: { $0 !== titleField && $0 !== field })
+
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: titleField.leadingAnchor),
+            field.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+            field.topAnchor.constraint(equalTo: (subtitleField ?? titleField).bottomAnchor, constant: 4),
+        ])
+
+        // Update bottom constraint
+        headerSummaryBottomConstraint?.isActive = false
+        if let btn = summarizeBtn, !btn.isHidden {
+            // Button still visible — it goes below summary
+            headerSummaryBottomConstraint = btn.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -12)
+        } else {
+            headerSummaryBottomConstraint = field.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -12)
+        }
+        headerSummaryBottomConstraint?.isActive = true
     }
 
     func hideSummarizeButton() {
@@ -153,7 +191,8 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         header.wantsLayer = true
         header.layer?.backgroundColor = NSColor(white: 0, alpha: 0.1).cgColor
 
-        let title = NSTextField(labelWithString: session.summary ?? session.savedName ?? session.firstUserMessage)
+        // Title: always the saved name or first user message
+        let title = NSTextField(labelWithString: session.savedName ?? session.firstUserMessage)
         title.font = .systemFont(ofSize: 15, weight: .semibold)
         title.textColor = .labelColor
         title.lineBreakMode = .byTruncatingTail
@@ -163,6 +202,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         title.translatesAutoresizingMaskIntoConstraints = false
         self.headerTitleField = title
+        self.headerSummaryField = nil
 
         let timeStr = RelativeDateTimeFormatter().localizedString(for: session.modificationDate, relativeTo: Date())
         let subtitle = NSTextField(labelWithString: "\(session.messageCount) messages \u{00B7} \(timeStr)")
@@ -188,9 +228,46 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         header.addSubview(subtitle)
         header.addSubview(buttonStack)
 
-        // Summarize with AI button (bottom left, below subtitle)
+        NSLayoutConstraint.activate([
+            title.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
+            title.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: buttonStack.leadingAnchor, constant: -12),
+
+            subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
+            subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+
+            buttonStack.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
+            buttonStack.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+        ])
+
+        // Track what the current bottom element is
+        var bottomAnchorView: NSView = subtitle
+
+        // Show existing summary if cached
+        if let summary = session.summary {
+            let field = NSTextField(labelWithString: summary)
+            field.font = .systemFont(ofSize: 12)
+            field.textColor = .secondaryLabelColor
+            field.lineBreakMode = .byTruncatingTail
+            field.maximumNumberOfLines = 5
+            field.cell?.wraps = true
+            field.cell?.isScrollable = false
+            field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            field.translatesAutoresizingMaskIntoConstraints = false
+            header.addSubview(field)
+            headerSummaryField = field
+
+            NSLayoutConstraint.activate([
+                field.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+                field.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+                field.topAnchor.constraint(equalTo: subtitle.bottomAnchor, constant: 4),
+            ])
+            bottomAnchorView = field
+        }
+
+        // Summarize button
         if showSummarizeButton {
-            let btn = NSButton(title: "Summarize with AI", target: self, action: #selector(summarizeClicked))
+            let btn = NSButton(title: "Summarize with Haiku", target: self, action: #selector(summarizeClicked))
             btn.bezelStyle = .rounded
             btn.controlSize = .small
             btn.translatesAutoresizingMaskIntoConstraints = false
@@ -198,38 +275,16 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
             header.addSubview(btn)
 
             NSLayoutConstraint.activate([
-                btn.topAnchor.constraint(equalTo: subtitle.bottomAnchor, constant: 8),
+                btn.topAnchor.constraint(equalTo: bottomAnchorView.bottomAnchor, constant: 8),
                 btn.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-                btn.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -12),
             ])
-
-            NSLayoutConstraint.activate([
-                title.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
-                title.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
-                title.trailingAnchor.constraint(lessThanOrEqualTo: buttonStack.leadingAnchor, constant: -12),
-
-                subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
-                subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-
-                buttonStack.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
-                buttonStack.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
-            ])
+            headerSummaryBottomConstraint = btn.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -12)
         } else {
             self.summarizeBtn = nil
-
-            NSLayoutConstraint.activate([
-                title.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
-                title.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
-                title.trailingAnchor.constraint(lessThanOrEqualTo: buttonStack.leadingAnchor, constant: -12),
-
-                subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
-                subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-                subtitle.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -12),
-
-                buttonStack.topAnchor.constraint(equalTo: header.topAnchor, constant: 12),
-                buttonStack.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
-            ])
+            headerSummaryBottomConstraint = bottomAnchorView.bottomAnchor.constraint(equalTo: header.bottomAnchor, constant: -12)
         }
+
+        headerSummaryBottomConstraint?.isActive = true
 
         return header
     }
