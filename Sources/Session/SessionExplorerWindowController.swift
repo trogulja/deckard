@@ -378,18 +378,8 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
     }
 
     private func summarizeAll(sessionId: String, entries: [TimelineEntry], actions: [Int: [String]]) {
-        guard let session = allSessions.first(where: { $0.sessionId == sessionId }) else { return }
+        timelineController?.setSummarizing(true)
 
-        // Show spinners on uncached action turns
-        let cached = SummaryManager.shared.cachedTurnSummaries(forSessionId: sessionId)
-        let uncachedTurns = Set(entries.map { $0.index }.filter {
-            actions[$0] != nil && !actions[$0]!.isEmpty && cached[$0] == nil
-        })
-        if !uncachedTurns.isEmpty {
-            timelineController?.setGeneratingTurns(uncachedTurns)
-        }
-
-        // Single combined AI call for both session summary + action summaries
         SummaryManager.shared.generateCombinedSummaries(
             sessionId: sessionId,
             projectPath: projectPath,
@@ -406,7 +396,7 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
             }
 
             self.timelineController?.updateActionSummaries(actionSummaries)
-            self.timelineController?.hideSummarizeButton()
+            self.timelineController?.setSummarizing(false)
         }
     }
 

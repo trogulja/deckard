@@ -13,7 +13,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
 
     private var currentSession: ExplorerSessionInfo?
     private var entries: [TimelineEntry] = []
-    private var generatingTurnIndices = Set<Int>() // turns currently being summarized
+    private var summarizeSpinner: NSProgressIndicator?
 
     // Callbacks
     var onResume: ((String) -> Void)?
@@ -70,7 +70,6 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
     ) {
         self.currentSession = session
         self.entries = entries
-        self.generatingTurnIndices.removeAll()
 
         // Apply cached action summaries
         for i in 0..<self.entries.count {
@@ -149,19 +148,33 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         headerSummaryBottomConstraint?.isActive = true
     }
 
-    func hideSummarizeButton() {
-        summarizeBtn?.isHidden = true
+    /// Transitions the button to a "generating" state: disabled, label changes, spinner appears.
+    func setSummarizing(_ active: Bool) {
+        guard let btn = summarizeBtn else { return }
+        if active {
+            btn.title = "Summarizing..."
+            btn.isEnabled = false
+
+            let spinner = NSProgressIndicator()
+            spinner.style = .spinning
+            spinner.controlSize = .small
+            spinner.translatesAutoresizingMaskIntoConstraints = false
+            spinner.startAnimation(nil)
+            btn.superview?.addSubview(spinner)
+            NSLayoutConstraint.activate([
+                spinner.leadingAnchor.constraint(equalTo: btn.trailingAnchor, constant: 6),
+                spinner.centerYAnchor.constraint(equalTo: btn.centerYAnchor),
+            ])
+            summarizeSpinner = spinner
+        } else {
+            btn.isHidden = true
+            summarizeSpinner?.removeFromSuperview()
+            summarizeSpinner = nil
+        }
     }
 
-    /// Marks turns as currently generating (shows spinner on each row).
-    func setGeneratingTurns(_ turnIndices: Set<Int>) {
-        generatingTurnIndices = turnIndices
-        tableView.reloadData()
-    }
-
-    /// Updates all action summaries at once and clears generating state.
+    /// Updates all action summaries at once.
     func updateActionSummaries(_ summaries: [Int: String]) {
-        generatingTurnIndices.removeAll()
         for i in 0..<entries.count {
             entries[i].actionSummary = summaries[entries[i].index]
         }
@@ -387,9 +400,8 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         metaField.translatesAutoresizingMaskIntoConstraints = false
         cell.addSubview(metaField)
 
-        // Action summary (what Claude did in response) or spinner
+        // Action summary (what Claude did in response)
         let actionField: NSTextField?
-        let actionSpinner: NSProgressIndicator?
         if let summary = entry.actionSummary {
             let field = NSTextField(labelWithString: "\u{2192} \(summary)")
             field.font = .systemFont(ofSize: 11)
@@ -402,19 +414,8 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
             field.translatesAutoresizingMaskIntoConstraints = false
             cell.addSubview(field)
             actionField = field
-            actionSpinner = nil
-        } else if generatingTurnIndices.contains(entry.index) {
-            let spinner = NSProgressIndicator()
-            spinner.style = .spinning
-            spinner.controlSize = .small
-            spinner.translatesAutoresizingMaskIntoConstraints = false
-            spinner.startAnimation(nil)
-            cell.addSubview(spinner)
-            actionField = nil
-            actionSpinner = spinner
         } else {
             actionField = nil
-            actionSpinner = nil
         }
 
         // Fork here button (icon rotated 180° so arrows point down)
@@ -494,14 +495,6 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
                 actionField.trailingAnchor.constraint(equalTo: starBtn.leadingAnchor, constant: -8),
                 actionField.topAnchor.constraint(equalTo: metaField.bottomAnchor, constant: 1),
                 actionField.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8),
-            ])
-        } else if let actionSpinner {
-            NSLayoutConstraint.activate([
-                actionSpinner.leadingAnchor.constraint(equalTo: msgField.leadingAnchor),
-                actionSpinner.topAnchor.constraint(equalTo: metaField.bottomAnchor, constant: 2),
-                actionSpinner.widthAnchor.constraint(equalToConstant: 14),
-                actionSpinner.heightAnchor.constraint(equalToConstant: 14),
-                actionSpinner.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8),
             ])
         } else {
             metaField.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8).isActive = true
