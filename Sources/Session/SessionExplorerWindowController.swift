@@ -251,12 +251,17 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
     }
 
     @objc private func starClicked(_ sender: NSButton) {
-        let sessionId = filteredSessions[sender.tag].sessionId
+        let row = sender.tag
+        guard row < filteredSessions.count else { return }
+        let sessionId = filteredSessions[row].sessionId
         let newState = BookmarkManager.shared.toggleBookmark(projectPath: projectPath, sessionId: sessionId)
         if let idx = allSessions.firstIndex(where: { $0.sessionId == sessionId }) {
             allSessions[idx].isBookmarked = newState
         }
-        applyFilter()
+        if let fIdx = filteredSessions.firstIndex(where: { $0.sessionId == sessionId }) {
+            filteredSessions[fIdx].isBookmarked = newState
+            listTableView.reloadData(forRowIndexes: IndexSet(integer: fIdx), columnIndexes: IndexSet(integer: 0))
+        }
     }
 
     // MARK: - Search
