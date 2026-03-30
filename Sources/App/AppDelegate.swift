@@ -201,6 +201,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         newFolderItem.target = self
         fileMenu.addItem(newFolderItem)
 
+        let exploreSessionsItem = NSMenuItem(title: "Explore Sessions", action: #selector(exploreSessions), keyEquivalent: "")
+        exploreSessionsItem.setShortcut(for: .exploreSessions)
+        fileMenu.addItem(exploreSessionsItem)
+
         let closeProjectItem = NSMenuItem(title: "Close Folder", action: #selector(closeCurrentProject), keyEquivalent: "")
         closeProjectItem.setShortcut(for: .closeFolder)
         fileMenu.addItem(closeProjectItem)
@@ -296,6 +300,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         windowController?.closeCurrentTab()
+    }
+
+    @objc private func exploreSessions() {
+        windowController?.exploreCurrentProjectSessions()
     }
 
     @objc private func closeCurrentProject() {

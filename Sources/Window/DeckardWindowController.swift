@@ -474,6 +474,14 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         closeProject(at: selectedProjectIndex)
     }
 
+    func exploreCurrentProjectSessions() {
+        guard selectedProjectIndex >= 0, selectedProjectIndex < projects.count else { return }
+        let project = projects[selectedProjectIndex]
+        let fakeMenuItem = NSMenuItem()
+        fakeMenuItem.representedObject = project
+        exploreSessionsMenuAction(fakeMenuItem)
+    }
+
     func closeProject(at index: Int) {
         guard index >= 0, index < projects.count else { return }
         let project = projects[index]

@@ -1,4 +1,5 @@
 import AppKit
+import KeyboardShortcuts
 
 // MARK: - Sidebar Controller Extension
 
@@ -578,6 +579,7 @@ extension DeckardWindowController {
         let menu = NSMenu()
 
         let exploreItem = NSMenuItem(title: "Explore Sessions", action: #selector(exploreSessionsMenuAction(_:)), keyEquivalent: "")
+        exploreItem.setShortcut(for: .exploreSessions)
         exploreItem.target = self
         exploreItem.representedObject = project
         menu.addItem(exploreItem)
@@ -614,6 +616,7 @@ extension DeckardWindowController {
         menu.addItem(.separator())
 
         let closeItem = NSMenuItem(title: "Close Folder", action: #selector(closeProjectMenuAction(_:)), keyEquivalent: "")
+        closeItem.setShortcut(for: .closeFolder)
         closeItem.target = self
         closeItem.representedObject = project
         menu.addItem(closeItem)
