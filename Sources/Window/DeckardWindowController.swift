@@ -585,7 +585,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
 
     // MARK: - Tab Management (within a project)
 
-    func createTabInProject(_ project: ProjectItem, isClaude: Bool, name: String? = nil, sessionIdToResume: String? = nil, tmuxSessionToResume: String? = nil, extraArgs: String? = nil) {
+    func createTabInProject(_ project: ProjectItem, isClaude: Bool, name: String? = nil, sessionIdToResume: String? = nil, forkSession: Bool = false, tmuxSessionToResume: String? = nil, extraArgs: String? = nil) {
         let surface = TerminalSurface()
         let tabName: String
         if let name = name {
@@ -621,7 +621,8 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
                 let encoded = project.path.claudeProjectDirName
                 let jsonlPath = NSHomeDirectory() + "/.claude/projects/\(encoded)/\(sessionIdToResume).jsonl"
                 if FileManager.default.fileExists(atPath: jsonlPath) {
-                    claudeArgs = " --resume \(sessionIdToResume)\(extraArgsSuffix)"
+                    let forkFlag = forkSession ? " --fork-session" : ""
+                    claudeArgs = " --resume \(sessionIdToResume)\(forkFlag)\(extraArgsSuffix)"
                 } else {
                     tab.sessionId = nil
                 }
