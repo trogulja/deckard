@@ -67,8 +67,10 @@ class BookmarkManager {
 
     private func loadAll() -> [String: [SessionBookmark]] {
         if let cached = cache { return cached }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
         guard let data = try? Data(contentsOf: fileURL),
-              let dict = try? JSONDecoder().decode([String: [SessionBookmark]].self, from: data) else {
+              let dict = try? decoder.decode([String: [SessionBookmark]].self, from: data) else {
             cache = [:]
             return [:]
         }

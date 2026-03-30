@@ -574,17 +574,6 @@ extension DeckardWindowController {
 
     // MARK: - Project Context Menu
 
-    class ResumeSessionInfo {
-        let project: ProjectItem
-        let sessionId: String
-        let tabName: String?
-        init(project: ProjectItem, sessionId: String, tabName: String?) {
-            self.project = project
-            self.sessionId = sessionId
-            self.tabName = tabName
-        }
-    }
-
     func buildProjectContextMenu(for project: ProjectItem) -> NSMenu {
         let menu = NSMenu()
 
@@ -659,25 +648,6 @@ extension DeckardWindowController {
         guard let project = sender.representedObject as? ProjectItem,
               let pi = projects.firstIndex(where: { $0.id == project.id }) else { return }
         closeProject(at: pi)
-    }
-
-    @objc func resumeSessionMenuAction(_ sender: NSMenuItem) {
-        guard let info = sender.representedObject as? ResumeSessionInfo else { return }
-        let project = info.project
-        let sessionId = info.sessionId
-
-        createTabInProject(project, isClaude: true, name: info.tabName, sessionIdToResume: sessionId)
-        project.selectedTabIndex = project.tabs.count - 1
-
-        if let pi = projects.firstIndex(where: { $0.id == project.id }) {
-            if pi == selectedProjectIndex {
-                rebuildTabBar()
-                showTab(project.tabs[project.selectedTabIndex])
-            } else {
-                selectProject(at: pi)
-            }
-        }
-        saveState()
     }
 
     @objc func exploreSessionsMenuAction(_ sender: NSMenuItem) {

@@ -59,44 +59,40 @@ class ContextMonitor {
                   let modDate = attrs[.modificationDate] as? Date else { continue }
 
             var firstMessage = ""
-            var uniqueUserTurns = 0
 
-            if let data = try? Data(contentsOf: URL(fileURLWithPath: filePath)),
-               let fileContent = String(data: data, encoding: .utf8) {
-                var seenPromptIds = Set<String>()
-                let lines = fileContent.components(separatedBy: "\n")
-                for line in lines where !line.isEmpty {
-                    guard let ld = line.data(using: .utf8),
-                          let json = try? JSONSerialization.jsonObject(with: ld) as? [String: Any] else { continue }
+            if let fh = FileHandle(forReadingAtPath: filePath) {
+                let headData = fh.readData(ofLength: 8192)
+                try? fh.close()
 
-                    let type = json["type"] as? String ?? ""
-                    if type == "user", let promptId = json["promptId"] as? String, !seenPromptIds.contains(promptId) {
-                        let msg = json["message"] as? [String: Any]
-                        var text = ""
-                        if let content = msg?["content"] as? String {
-                            text = content
-                        } else if let contentArr = msg?["content"] as? [[String: Any]] {
-                            text = contentArr.first(where: { $0["type"] as? String == "text" })?["text"] as? String ?? ""
-                        }
-                        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmed.isEmpty else {
-                            seenPromptIds.insert(promptId)
-                            continue
-                        }
-                        seenPromptIds.insert(promptId)
-                        uniqueUserTurns += 1
-                        if firstMessage.isEmpty {
-                            firstMessage = trimmed.components(separatedBy: "\n").first ?? ""
+                if let headStr = String(data: headData, encoding: .utf8) {
+                    let lines = headStr.components(separatedBy: "\n")
+                    for line in lines where !line.isEmpty {
+                        guard let ld = line.data(using: .utf8),
+                              let json = try? JSONSerialization.jsonObject(with: ld) as? [String: Any] else { continue }
+
+                        let type = json["type"] as? String ?? ""
+                        if type == "user" && firstMessage.isEmpty {
+                            if let msg = json["message"] as? [String: Any] {
+                                if let content = msg["content"] as? String {
+                                    firstMessage = content
+                                } else if let contentArr = msg["content"] as? [[String: Any]] {
+                                    firstMessage = contentArr.first(where: { $0["type"] as? String == "text" })?["text"] as? String ?? ""
+                                }
+                            }
+                            break
                         }
                     }
                 }
             }
 
+            firstMessage = firstMessage.components(separatedBy: "\n").first ?? ""
+            firstMessage = firstMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+
             results.append(SessionInfo(
                 sessionId: sessionId,
                 modificationDate: modDate,
                 firstUserMessage: firstMessage,
-                messageCount: uniqueUserTurns
+                messageCount: 0
             ))
         }
 

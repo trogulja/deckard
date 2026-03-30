@@ -245,6 +245,10 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
     }
 
     private func promptForBookmarkLabel(defaultLabel: String, completion: @escaping (String?) -> Void) {
+        guard let window else {
+            completion(nil)
+            return
+        }
         let alert = NSAlert()
         alert.messageText = "Bookmark Label"
         alert.informativeText = "Enter a name for this bookmark:"
@@ -255,7 +259,7 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
         input.stringValue = defaultLabel
         alert.accessoryView = input
 
-        alert.beginSheetModal(for: window!) { response in
+        alert.beginSheetModal(for: window) { response in
             if response == .alertFirstButtonReturn {
                 let label = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
                 completion(label.isEmpty ? defaultLabel : label)
@@ -500,6 +504,8 @@ extension SessionExplorerWindowController: NSTableViewDataSource, NSTableViewDel
 
 extension SessionExplorerWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        // Allow deallocation
+        if let w = window {
+            objc_setAssociatedObject(w, "explorerController", nil, .OBJC_ASSOCIATION_RETAIN)
+        }
     }
 }
