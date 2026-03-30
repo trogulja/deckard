@@ -10,6 +10,7 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
 
     private var currentSession: ExplorerSessionInfo?
     private var entries: [TimelineEntry] = []
+    private var actionSummarySpinner: NSProgressIndicator?
 
     // Callbacks
     var onResume: ((String) -> Void)?
@@ -89,7 +90,25 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
         }
     }
 
+    func showActionSummaryProgress() {
+        guard actionSummarySpinner == nil, let headerView else { return }
+        let spinner = NSProgressIndicator()
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.startAnimation(nil)
+        headerView.addSubview(spinner)
+        NSLayoutConstraint.activate([
+            spinner.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 16),
+            spinner.bottomAnchor.constraint(equalTo: headerView.bottomAnchor, constant: -8),
+        ])
+        actionSummarySpinner = spinner
+    }
+
     func updateActionSummaries(_ summaries: [Int: String]) {
+        actionSummarySpinner?.stopAnimation(nil)
+        actionSummarySpinner?.removeFromSuperview()
+        actionSummarySpinner = nil
         for i in 0..<entries.count {
             entries[i].actionSummary = summaries[entries[i].index]
         }
@@ -273,7 +292,14 @@ class SessionExplorerTimelineController: NSObject, NSTableViewDataSource, NSTabl
 
         // Fork here button
         let forkBtn = NSButton(title: "", target: nil, action: nil)
-        forkBtn.image = NSImage(systemSymbolName: "arrow.branch", accessibilityDescription: "Fork here")
+        if let branchImage = NSImage(systemSymbolName: "arrow.branch", accessibilityDescription: "Fork here") {
+            let flipped = NSImage(size: branchImage.size, flipped: true) { rect in
+                branchImage.draw(in: rect)
+                return true
+            }
+            flipped.isTemplate = true
+            forkBtn.image = flipped
+        }
         forkBtn.bezelStyle = .inline
         forkBtn.isBordered = false
         forkBtn.toolTip = "Fork here"

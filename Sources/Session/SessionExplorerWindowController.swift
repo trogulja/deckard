@@ -363,6 +363,9 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
 
         // Generate action summaries for each turn
         let actions = ContextMonitor.shared.parseActions(sessionId: sessionId, projectPath: projectPath)
+        if !actions.isEmpty {
+            timelineController?.showActionSummaryProgress()
+        }
         SummaryManager.shared.generateTurnSummaries(sessionId: sessionId, actions: actions) { [weak self] summaries in
             guard let self, self.selectedSessionId == sessionId else { return }
             self.timelineController?.updateActionSummaries(summaries)
