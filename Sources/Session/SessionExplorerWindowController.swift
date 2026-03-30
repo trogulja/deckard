@@ -343,9 +343,14 @@ class SessionExplorerWindowController: NSWindowController, NSSplitViewDelegate, 
             if let summary = sessionSummary,
                let idx = self.allSessions.firstIndex(where: { $0.sessionId == sessionId }) {
                 self.allSessions[idx].summary = summary
-                self.applyFilter()
+                // Update just this row in the left sidebar without resetting scroll
+                if let fIdx = self.filteredSessions.firstIndex(where: { $0.sessionId == sessionId }) {
+                    self.filteredSessions[fIdx].summary = summary
+                    self.listTableView.reloadData(forRowIndexes: IndexSet(integer: fIdx), columnIndexes: IndexSet(integer: 0))
+                }
             }
 
+            // Rebuild right pane with updated data
             self.selectSession(sessionId: sessionId, scrollToMessageIndex: nil)
         }
     }
