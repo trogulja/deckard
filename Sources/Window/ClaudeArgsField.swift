@@ -50,6 +50,12 @@ final class ClaudeArgsField: NSView {
         textField.cell?.sendsActionOnEndEditing = false
         addSubview(textField)
 
+        // Re-parse chips when CLI flags finish loading (they load async at startup).
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(flagsDidLoad),
+            name: ClaudeCLIFlags.didLoadNotification, object: nil
+        )
+
         NSLayoutConstraint.activate([
             chipContainer.topAnchor.constraint(equalTo: topAnchor, constant: 4),
             chipContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
@@ -71,6 +77,18 @@ final class ClaudeArgsField: NSView {
     private func updateBorderColor() {
         layer?.borderColor = NSColor.separatorColor.cgColor
         layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+    }
+
+    @objc private func flagsDidLoad() {
+        // Re-parse the current value now that we know which flags are boolean vs valued.
+        let current = stringValue
+        if !current.isEmpty {
+            loadChips(from: current)
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - Chip Management

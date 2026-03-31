@@ -32,6 +32,9 @@ final class ClaudeCLIFlags {
         "--no-session-persistence", "--fallback-model", "--from-pr", "--session-id",
     ]
 
+    /// Posted on the main thread when flags finish loading.
+    static let didLoadNotification = Notification.Name("ClaudeCLIFlagsDidLoad")
+
     /// Run `claude --help` asynchronously and parse the output.
     func load() {
         DispatchQueue.global(qos: .utility).async { [weak self] in
@@ -39,6 +42,7 @@ final class ClaudeCLIFlags {
             let parsed = Self.parse(helpOutput: output)
             DispatchQueue.main.async {
                 self?.flags = parsed
+                NotificationCenter.default.post(name: Self.didLoadNotification, object: nil)
             }
         }
     }
@@ -120,9 +124,13 @@ final class ClaudeCLIFlags {
     }
 
     private static func runClaudeHelp() -> String? {
+        // Use a login shell so the user's full PATH is available.
+        // macOS apps launched from Finder get a minimal PATH that won't include
+        // homebrew, npm global, or other common install locations.
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["claude", "--help"]
+        process.executableURL = URL(fileURLWithPath: shell)
+        process.arguments = ["-l", "-c", "claude --help"]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = Pipe()
