@@ -8,7 +8,6 @@ final class ClaudeArgsField: NSView {
     var onChange: ((String) -> Void)?
 
     private var chips: [ArgsChip] = []
-    private let chipContainer = NSView()
     private let textField = NSTextField()
     private var chipViews: [NSView] = []
     private var selectedChipIndex: Int?
@@ -37,10 +36,6 @@ final class ClaudeArgsField: NSView {
         layer?.borderWidth = 1
         updateBorderColor()
 
-        chipContainer.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(chipContainer)
-
-        textField.translatesAutoresizingMaskIntoConstraints = false
         textField.isBordered = false
         textField.drawsBackground = false
         textField.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
@@ -55,18 +50,6 @@ final class ClaudeArgsField: NSView {
             self, selector: #selector(flagsDidLoad),
             name: ClaudeCLIFlags.didLoadNotification, object: nil
         )
-
-        NSLayoutConstraint.activate([
-            chipContainer.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            chipContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            chipContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-
-            textField.topAnchor.constraint(equalTo: chipContainer.bottomAnchor, constant: 2),
-            textField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            textField.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            textField.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-            textField.heightAnchor.constraint(equalToConstant: 22),
-        ])
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -86,6 +69,8 @@ final class ClaudeArgsField: NSView {
             loadChips(from: current)
         }
     }
+
+    override var isFlipped: Bool { true }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
@@ -116,40 +101,69 @@ final class ClaudeArgsField: NSView {
         chipViews.forEach { $0.removeFromSuperview() }
         chipViews.removeAll()
 
-        chipContainerHeightConstraint?.isActive = false
-
-        guard !chips.isEmpty else {
-            let zeroHeight = chipContainer.heightAnchor.constraint(equalToConstant: 0)
-            zeroHeight.isActive = true
-            chipContainerHeightConstraint = zeroHeight
-            textField.placeholderString = "Type a flag name..."
-            return
+        let hasPending = pendingFlag != nil
+        textField.placeholderString = if chips.isEmpty && !hasPending {
+            "Type a flag name..."
+        } else if hasPending {
+            pendingFlag?.valuePlaceholder ?? "<value>"
+        } else {
+            ""
         }
 
-        textField.placeholderString = ""
-
-        var x: CGFloat = 0
-        var y: CGFloat = 0
+        let inset: CGFloat = 6
         let spacing: CGFloat = 4
-        let maxWidth = bounds.width - 12
+        let rowHeight: CGFloat = 20
+        let maxWidth = bounds.width - inset * 2
+        var x: CGFloat = 0
+        var row: Int = 0
+
+        func wrap() {
+            x = 0
+            row += 1
+        }
+
+        func yForRow() -> CGFloat {
+            inset + CGFloat(row) * (rowHeight + spacing)
+        }
 
         for (i, chip) in chips.enumerated() {
             let view = makeChipView(chip, index: i)
-            let size = view.fittingSize
-            if x + size.width > maxWidth && x > 0 {
-                x = 0
-                y += size.height + spacing
-            }
-            view.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
-            chipContainer.addSubview(view)
+            let w = view.fittingSize.width
+            if x + w > maxWidth && x > 0 { wrap() }
+            view.frame = NSRect(x: inset + x, y: yForRow(), width: w, height: rowHeight)
+            addSubview(view)
             chipViews.append(view)
-            x += size.width + spacing
+            x += w + spacing
         }
 
-        let totalHeight = y + (chipViews.last?.frame.height ?? 0)
-        let heightConstraint = chipContainer.heightAnchor.constraint(equalToConstant: totalHeight)
-        heightConstraint.isActive = true
-        chipContainerHeightConstraint = heightConstraint
+        if let flag = pendingFlag {
+            let preview = makePendingChipView(flag)
+            let w = preview.fittingSize.width
+            if x + w > maxWidth && x > 0 { wrap() }
+            preview.frame = NSRect(x: inset + x, y: yForRow(), width: w, height: rowHeight)
+            addSubview(preview)
+            chipViews.append(preview)
+            x += w + spacing
+        }
+
+        // Place the text field inline on the same row.
+        // Nudge down 2pt to align baselines with NSButton inline bezel text.
+        let minTextWidth: CGFloat = 80
+        let remainingWidth = maxWidth - x
+        if remainingWidth < minTextWidth && x > 0 { wrap() }
+        let tfWidth = x > 0 ? remainingWidth : maxWidth
+        textField.frame = NSRect(x: inset + x, y: yForRow() + 3, width: tfWidth, height: rowHeight)
+
+        let totalHeight = yForRow() + rowHeight + inset
+        // Update the view's intrinsic height via a frame-based constraint
+        if let existing = chipContainerHeightConstraint {
+            existing.constant = totalHeight
+        } else {
+            let hc = heightAnchor.constraint(equalToConstant: totalHeight)
+            hc.priority = .defaultHigh
+            hc.isActive = true
+            chipContainerHeightConstraint = hc
+        }
     }
 
     private func makeChipView(_ chip: ArgsChip, index: Int) -> NSView {
@@ -173,6 +187,19 @@ final class ClaudeArgsField: NSView {
             button.contentTintColor = .white
         }
 
+        return button
+    }
+
+    /// A dimmed chip showing the flag name while the user types its value.
+    private func makePendingChipView(_ flag: ClaudeFlag) -> NSView {
+        let button = NSButton(title: flag.longName, target: nil, action: nil)
+        button.bezelStyle = .inline
+        button.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        button.isBordered = true
+        button.isEnabled = false
+        button.wantsLayer = true
+        button.layer?.cornerRadius = 4
+        button.alphaValue = 0.6
         return button
     }
 
@@ -268,6 +295,8 @@ extension ClaudeArgsField: NSTextFieldDelegate, NSTableViewDataSource, NSTableVi
         table.backgroundColor = .clear
         table.dataSource = self
         table.delegate = self
+        table.action = #selector(suggestionClicked(_:))
+        table.target = self
 
         let scroll = NSScrollView(frame: effect.bounds)
         scroll.autoresizingMask = [.width, .height]
@@ -472,7 +501,7 @@ extension ClaudeArgsField: NSTextFieldDelegate, NSTableViewDataSource, NSTableVi
             if pendingFlag != nil {
                 pendingFlag = nil
                 textField.stringValue = ""
-                textField.placeholderString = chips.isEmpty ? "Type a flag name..." : ""
+                rebuildChipViews()
                 hideSuggestions()
                 return true
             }
@@ -533,7 +562,7 @@ extension ClaudeArgsField: NSTextFieldDelegate, NSTableViewDataSource, NSTableVi
         case .freeText:
             pendingFlag = flag
             textField.stringValue = ""
-            textField.placeholderString = flag.valuePlaceholder ?? "<value>"
+            rebuildChipViews()
         }
     }
 
@@ -566,17 +595,18 @@ extension ClaudeArgsField: NSTextFieldDelegate, NSTableViewDataSource, NSTableVi
             value = text.isEmpty ? nil : text
         }
 
-        if let value {
-            addChip(ArgsChip(flag: flag.longName, value: value))
-        } else {
-            // No value provided — add flag without value
-            addChip(ArgsChip(flag: flag.longName, value: nil))
-        }
-
+        // Clear pending state before addChip — addChip triggers rebuildChipViews
+        // which would render a ghost pending chip if pendingFlag is still set.
         pendingFlag = nil
         enumChoices = []
         textField.stringValue = ""
         textField.placeholderString = ""
+
+        if let value {
+            addChip(ArgsChip(flag: flag.longName, value: value))
+        } else {
+            addChip(ArgsChip(flag: flag.longName, value: nil))
+        }
         hideSuggestions()
     }
 
@@ -703,6 +733,25 @@ extension ClaudeArgsField: NSTextFieldDelegate, NSTableViewDataSource, NSTableVi
         }
 
         return cell
+    }
+
+    @objc private func suggestionClicked(_ sender: Any?) {
+        guard let table = suggestionTable, table.clickedRow >= 0 else { return }
+        selectedSuggestionRow = table.clickedRow
+
+        if !enumChoices.isEmpty {
+            // Accepting an enum choice
+            guard let flag = pendingFlag, table.clickedRow < enumChoices.count else { return }
+            let value = enumChoices[table.clickedRow]
+            pendingFlag = nil
+            textField.stringValue = ""
+            textField.placeholderString = ""
+            enumChoices = []
+            addChip(ArgsChip(flag: flag.longName, value: value))
+            hideSuggestions()
+        } else if table.clickedRow < filteredFlags.count {
+            acceptSuggestion(filteredFlags[table.clickedRow])
+        }
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
