@@ -17,30 +17,42 @@ Run multiple sessions side by side in a single window with tabs, projects, and s
 
 ![Deckard screenshot](docs/images/screenshot.png)
 
-<table>
-<tr>
-<td><strong>Multi-tab sessions</strong><br><img src="docs/images/screenshot-tabs.webp" alt="Tab bar with Claude and terminal tabs" width="400"></td>
-<td><strong>Project sidebar</strong><br><img src="docs/images/screenshot-sidebar.webp" alt="Project sidebar with folders" width="230"></td>
-<td><strong>Status indicators</strong><br><img src="docs/images/screenshot-status-indicators.webp" alt="Customizable status indicator dots" width="400"></td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td><strong>Session explorer</strong> — browse, search, resume, and fork past sessions<br><img src="docs/images/screenshot-session-explorer.webp" alt="Session explorer window" width="540"></td>
-<td><strong>486 themes</strong> — with customizable status indicator shapes, colors, and blink<br><img src="docs/images/screenshot-themes.webp" alt="Theme settings with status indicators" width="350"></td>
-</tr>
-</table>
-
 ## Features
 
-- **Multi-tab sessions**: Open multiple Claude Code (and plain terminal) tabs per project. Switch between them with Cmd+1–9 or drag to reorder.
-- **Project sidebar**: Each open directory gets its own set of tabs, persisted across restarts. Group related projects into collapsible sidebar folders for organization (e.g., by client).
+### Multi-tab sessions
+
+Open multiple Claude Code (and plain terminal) tabs per project. Switch between them with Cmd+1–9 or drag to reorder.
+
+<img src="docs/images/screenshot-tabs.webp" alt="Tab bar with Claude and terminal tabs" width="600">
+
+### Project sidebar
+
+Each open directory gets its own set of tabs, persisted across restarts. Group related projects into collapsible sidebar folders for organization (e.g., by client).
+
+<img src="docs/images/screenshot-sidebar.webp" alt="Project sidebar with folders" width="280">
+
+### Session state detection
+
+Tab badges show whether Claude is thinking, waiting for input, needs tool permission, or has errored. Terminal tabs show real-time CPU and disk activity for the foreground process.
+
+<img src="docs/images/screenshot-status-indicators.webp" alt="Status indicator dots" width="500">
+
+### Session explorer
+
+Browse all past Claude sessions with Cmd+Shift+E. View the full conversation timeline, resume or fork from any point, and bookmark favorites with a star toggle. Optionally summarize sessions and per-turn actions with Haiku — summaries are cached and incrementally updated when sessions are continued.
+
+<img src="docs/images/screenshot-session-explorer.webp" alt="Session explorer window" width="600">
+
+### 486 color themes
+
+Ships with 486 built-in themes (Ghostty format) and loads custom themes from `~/.config/ghostty/themes`. Search and preview in Settings. Status indicator shapes, colors, and blink are fully customizable.
+
+<img src="docs/images/screenshot-themes.webp" alt="Theme settings with status indicators" width="500">
+
+### More
+
 - **Context & quota tracking**: A progress bar shows context window usage. A sparkline visualizes token rate over time, and rate limit indicators show 5-hour and 7-day quota consumption.
-- **Session state detection**: Tab badges show whether Claude is thinking, waiting for input, needs tool permission, or has errored. Terminal tabs show real-time CPU and disk activity for the foreground process.
-- **Session explorer**: Right-click a project and choose "Explore Sessions" (or press Cmd+Shift+E) to browse all past Claude sessions. View the full conversation timeline, resume or fork from any point, and bookmark favorite sessions with a star toggle. Optionally summarize sessions and per-turn actions with Haiku — summaries are cached and incrementally updated when sessions are continued.
 - **Session persistence**: Claude sessions resume via `--resume`. Tab structure and working directories are preserved across restarts.
-- **486 color themes**: Ships with 486 built-in themes (Ghostty format) and loads custom themes from `~/.config/ghostty/themes`. Search and preview in Settings.
 - **Customizable shortcuts**: All keyboard shortcuts are rebindable in Settings > Shortcuts.
 - **tmux integration**: When tmux is installed, terminal tabs are transparently wrapped in tmux sessions. Quit and relaunch Deckard to resume exactly where you left off — full shell state, scrollback, running processes, and environment preserved. tmux options are editable in Settings > Terminal. Works as a progressive enhancement; no tmux required.
 - **Drag and drop**: Drag files from Finder into the terminal — paths are automatically shell-escaped and inserted.
