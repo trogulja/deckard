@@ -65,8 +65,7 @@ class ContextMonitor {
                 try? fh.close()
 
                 if let headStr = String(data: headData, encoding: .utf8) {
-                    let lines = headStr.components(separatedBy: "\n")
-                    for line in lines where !line.isEmpty {
+                    for line in headStr.split(separator: "\n") {
                         guard let ld = line.data(using: .utf8),
                               let json = try? JSONSerialization.jsonObject(with: ld) as? [String: Any] else { continue }
 
@@ -85,7 +84,7 @@ class ContextMonitor {
                 }
             }
 
-            firstMessage = firstMessage.components(separatedBy: "\n").first ?? ""
+            firstMessage = firstMessage.split(separator: "\n").first.map(String.init) ?? ""
             firstMessage = firstMessage.trimmingCharacters(in: .whitespacesAndNewlines)
 
             results.append(SessionInfo(
@@ -114,7 +113,7 @@ class ContextMonitor {
         let iso8601 = ISO8601DateFormatter()
         iso8601.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
-        for line in content.components(separatedBy: "\n") where !line.isEmpty {
+        for line in content.split(separator: "\n") {
             guard let lineData = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                   let type = json["type"] as? String, type == "user",
@@ -169,7 +168,7 @@ class ContextMonitor {
         var currentTurnIndex = -1
         var seenPromptIds = Set<String>()
 
-        for line in content.components(separatedBy: "\n") where !line.isEmpty {
+        for line in content.split(separator: "\n") {
             guard let lineData = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                   let type = json["type"] as? String else { continue }
@@ -203,7 +202,7 @@ class ContextMonitor {
                         let filename = (fp as NSString).lastPathComponent
                         desc = "\(name) \(filename)"
                     } else if let cmd = input["command"] as? String {
-                        let brief = cmd.components(separatedBy: "\n").first ?? cmd
+                        let brief = cmd.split(separator: "\n").first.map(String.init) ?? cmd
                         desc = "\(name): \(String(brief.prefix(50)))"
                     } else if let pattern = input["pattern"] as? String {
                         desc = "\(name) \(pattern)"
@@ -226,7 +225,7 @@ class ContextMonitor {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: jsonlPath)),
               let content = String(data: data, encoding: .utf8) else { return nil }
 
-        let lines = content.components(separatedBy: "\n")
+        let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
         var seenPromptIds = Set<String>()
         var uniqueTurnCount = -1  // will be incremented to 0 on first user turn
         var cutoffLineIndex = lines.count
@@ -276,66 +275,103 @@ class ContextMonitor {
         }
     }
 
+    /// Per-session cache so we don't flicker the context bar to nil when a tail
+    /// read misses the usage entry (e.g. large tool-result block at end of file).
+    /// Access only via `cachedUsage(_:)` and `setCachedUsage(_:for:)`.
+    private var usageCache: [String: ContextUsage] = [:]
+    private let cacheLock = NSLock()
+
+    private func cachedUsage(_ sessionId: String) -> ContextUsage? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return usageCache[sessionId]
+    }
+
+    private func setCachedUsage(_ usage: ContextUsage, for sessionId: String) {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        usageCache[sessionId] = usage
+    }
+
     /// Get context usage for a session by reading its JSONL file.
     /// Only reads the tail of the file to find the most recent usage entry.
+    /// Falls back to a cached value when the tail doesn't contain a usage entry.
     func getUsage(sessionId: String, projectPath: String) -> ContextUsage? {
         let encoded = projectPath.claudeProjectDirName
         let jsonlPath = NSHomeDirectory() + "/.claude/projects/\(encoded)/\(sessionId).jsonl"
 
+        if let usage = getUsageFromFile(at: jsonlPath) {
+            setCachedUsage(usage, for: sessionId)
+            DiagnosticLog.shared.log("context",
+                "getUsage: \(sessionId) \(usage.contextUsed)/\(usage.contextLimit) (\(Int(usage.percentage))%) model=\(usage.model)")
+            return usage
+        }
+
+        // No usage found — return cached value if available
+        let cached = cachedUsage(sessionId)
+        DiagnosticLog.shared.log("context",
+            "getUsage: \(sessionId) no usage found, cached=\(cached != nil)")
+        return cached
+    }
+
+    /// Parse context usage from a JSONL file at the given path.
+    /// Uses a progressive tail read (256KB then 1MB) to handle large files
+    /// where tool results push usage entries far from the end.
+    func getUsageFromFile(at jsonlPath: String) -> ContextUsage? {
         guard let fh = FileHandle(forReadingAtPath: jsonlPath) else { return nil }
         defer { try? fh.close() }
 
         let fileSize = fh.seekToEndOfFile()
         guard fileSize > 0 else { return nil }
 
-        // --- Find last usage: read only the tail of the file ---
-        // Usage entries appear near the end. Read the last 64KB (enough for
-        // several assistant response entries).
-        let tailSize: UInt64 = 64 * 1024
-        let tailOffset = fileSize > tailSize ? fileSize - tailSize : 0
-        fh.seek(toFileOffset: tailOffset)
-        let tailData = fh.readData(ofLength: Int(fileSize - tailOffset))
-        guard let tailContent = String(data: tailData, encoding: .utf8) else { return nil }
+        // --- Progressive tail read ---
+        // Start with 256KB; if that misses, try 1MB. Large tool results
+        // (file reads, grep output) can easily exceed 64KB.
+        let tailSizes: [UInt64] = [256 * 1024, 1024 * 1024]
 
-        var lastInput = 0
-        var lastCacheRead = 0
-        var model = ""
+        for tailSize in tailSizes {
+            let tailOffset = fileSize > tailSize ? fileSize - tailSize : 0
+            fh.seek(toFileOffset: tailOffset)
+            let tailData = fh.readData(ofLength: Int(fileSize - tailOffset))
+            guard let tailContent = String(data: tailData, encoding: .utf8) else { continue }
 
-        // Split tail into lines and scan in reverse for the last usage entry
-        let lines = tailContent.components(separatedBy: "\n")
+            if let usage = parseUsage(from: tailContent) {
+                return usage
+            }
+        }
+
+        return nil
+    }
+
+    /// Parse the last usage entry from JSONL content, scanning lines in reverse.
+    func parseUsage(from content: String) -> ContextUsage? {
+        let lines = content.split(separator: "\n")
         for line in lines.reversed() {
-            guard !line.isEmpty else { continue }
             guard let lineData = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
 
             if let msg = json["message"] as? [String: Any], let usage = msg["usage"] as? [String: Any] {
-                lastInput = usage["input_tokens"] as? Int ?? 0
-                lastCacheRead = usage["cache_read_input_tokens"] as? Int ?? 0
-                if lastInput + lastCacheRead == 0 { continue }
-                model = msg["model"] as? String ?? model
-                break
+                let input = usage["input_tokens"] as? Int ?? 0
+                let cacheRead = usage["cache_read_input_tokens"] as? Int ?? 0
+                if input + cacheRead == 0 { continue }
+                let model = msg["model"] as? String ?? ""
+                let limit = contextLimits[model] ?? defaultLimit
+                return ContextUsage(model: model, inputTokens: input,
+                                    cacheReadTokens: cacheRead, contextLimit: limit)
             }
 
             if let msg = json["message"] as? [String: Any],
                let inner = msg["message"] as? [String: Any],
                let usage = inner["usage"] as? [String: Any] {
-                lastInput = usage["input_tokens"] as? Int ?? 0
-                lastCacheRead = usage["cache_read_input_tokens"] as? Int ?? 0
-                if lastInput + lastCacheRead == 0 { continue }
-                model = inner["model"] as? String ?? model
-                break
+                let input = usage["input_tokens"] as? Int ?? 0
+                let cacheRead = usage["cache_read_input_tokens"] as? Int ?? 0
+                if input + cacheRead == 0 { continue }
+                let model = inner["model"] as? String ?? ""
+                let limit = contextLimits[model] ?? defaultLimit
+                return ContextUsage(model: model, inputTokens: input,
+                                    cacheReadTokens: cacheRead, contextLimit: limit)
             }
         }
-
-        guard !model.isEmpty || lastInput > 0 || lastCacheRead > 0 else { return nil }
-
-        let limit = contextLimits[model] ?? defaultLimit
-
-        return ContextUsage(
-            model: model,
-            inputTokens: lastInput,
-            cacheReadTokens: lastCacheRead,
-            contextLimit: limit,
-        )
+        return nil
     }
 }

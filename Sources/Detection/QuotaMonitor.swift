@@ -33,11 +33,27 @@ class QuotaMonitor {
         return nil
     }
 
-    private(set) var tokenRate: TokenRate?
-    private(set) var sparklineData: [Double] = []  // Ring buffer, max 30 points
-    private var lastSparklinePush: Date = .distantPast
+    /// Lock protecting `_tokenRate`, `_sparklineData`, and `_lastSparklinePush`
+    /// which are written from a background queue in `computeTokenRate` and
+    /// read from the main thread.
+    private let rateLock = NSLock()
+    private var _tokenRate: TokenRate?
+    private var _sparklineData: [Double] = []  // Ring buffer, max 30 points
+    private var _lastSparklinePush: Date = .distantPast
     private let sparklineMaxPoints = 30
     private let sparklinePushInterval: TimeInterval = 10  // seconds between data points
+
+    var tokenRate: TokenRate? {
+        rateLock.lock()
+        defer { rateLock.unlock() }
+        return _tokenRate
+    }
+
+    var sparklineData: [Double] {
+        rateLock.lock()
+        defer { rateLock.unlock() }
+        return _sparklineData
+    }
 
     init() {
         loadCachedSnapshot()
@@ -129,7 +145,7 @@ class QuotaMonitor {
         }
 
         guard let jsonlPath = bestFile else {
-            tokenRate = nil
+            setRate(nil, tokensPerMinute: nil)
             return nil
         }
 
@@ -139,14 +155,14 @@ class QuotaMonitor {
 
         // Read last 128KB of the file using FileHandle-based tail reading
         guard let fh = FileHandle(forReadingAtPath: jsonlPath) else {
-            tokenRate = nil
+            setRate(nil, tokensPerMinute: nil)
             return nil
         }
         defer { try? fh.close() }
 
         let fileSize = fh.seekToEndOfFile()
         guard fileSize > 0 else {
-            tokenRate = nil
+            setRate(nil, tokensPerMinute: nil)
             return nil
         }
 
@@ -155,14 +171,13 @@ class QuotaMonitor {
         fh.seek(toFileOffset: tailOffset)
         let tailData = fh.readData(ofLength: Int(fileSize - tailOffset))
         guard let tailContent = String(data: tailData, encoding: .utf8) else {
-            tokenRate = nil
+            setRate(nil, tokensPerMinute: nil)
             return nil
         }
 
         // Parse lines in reverse looking for output_tokens with timestamps
-        let lines = tailContent.components(separatedBy: "\n")
+        let lines = tailContent.split(separator: "\n")
         for line in lines.reversed() {
-            guard !line.isEmpty else { continue }
             guard let lineData = line.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
 
@@ -189,7 +204,7 @@ class QuotaMonitor {
         }
 
         guard totalOutputTokens > 0, let earliest = earliestTimestamp else {
-            tokenRate = nil
+            setRate(nil, tokensPerMinute: nil)
             return nil
         }
 
@@ -200,26 +215,36 @@ class QuotaMonitor {
         let windowSeconds = Int(now.timeIntervalSince(earliest))
 
         let rate = TokenRate(tokensPerMinute: tokensPerMinute, windowSeconds: windowSeconds)
-        tokenRate = rate
-
-        // Push to sparkline ring buffer if enough time has elapsed
-        if now.timeIntervalSince(lastSparklinePush) >= sparklinePushInterval {
-            if sparklineData.count >= sparklineMaxPoints {
-                sparklineData.removeFirst()
-            }
-            sparklineData.append(tokensPerMinute)
-            lastSparklinePush = now
-        }
-
+        setRate(rate, tokensPerMinute: tokensPerMinute)
         return rate
+    }
+
+    /// Thread-safe update of rate state. Called from `computeTokenRate` (background queue).
+    /// When `rate` is nil the sparkline is left untouched (no data point to push).
+    private func setRate(_ rate: TokenRate?, tokensPerMinute: Double?) {
+        rateLock.lock()
+        defer { rateLock.unlock() }
+        _tokenRate = rate
+        if let tpm = tokensPerMinute {
+            let now = Date()
+            if now.timeIntervalSince(_lastSparklinePush) >= sparklinePushInterval {
+                if _sparklineData.count >= sparklineMaxPoints {
+                    _sparklineData.removeFirst()
+                }
+                _sparklineData.append(tpm)
+                _lastSparklinePush = now
+            }
+        }
     }
 
     /// Clears all state (for unit tests).
     func resetForTesting() {
         liveSnapshot = nil
         cachedSnapshot = nil
-        tokenRate = nil
-        sparklineData = []
-        lastSparklinePush = .distantPast
+        rateLock.lock()
+        _tokenRate = nil
+        _sparklineData = []
+        _lastSparklinePush = .distantPast
+        rateLock.unlock()
     }
 }

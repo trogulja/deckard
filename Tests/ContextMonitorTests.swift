@@ -88,27 +88,228 @@ final class ContextMonitorTests: XCTestCase {
         XCTAssertEqual(usage.percentage, 50.0, accuracy: 0.01)
     }
 
-    // MARK: - JSONL parsing (via getUsage)
+    // MARK: - parseUsage (pure JSONL parsing)
 
-    func testGetUsageWithTempJSONL() throws {
-        // Create a temp JSONL file simulating a session file
-        let tempDir = NSTemporaryDirectory() + "deckard-context-test-\(UUID().uuidString)"
-        try FileManager.default.createDirectory(atPath: tempDir, withIntermediateDirectories: true)
-        addTeardownBlock { try? FileManager.default.removeItem(atPath: tempDir) }
+    func testParseUsageFlatFormat() {
+        let line = """
+        {"type":"assistant","message":{"model":"claude-opus-4-6","usage":{"input_tokens":500000,"cache_read_input_tokens":300000}}}
+        """
+        let usage = ContextMonitor.shared.parseUsage(from: line)
+        XCTAssertNotNil(usage)
+        XCTAssertEqual(usage?.model, "claude-opus-4-6")
+        XCTAssertEqual(usage?.inputTokens, 500_000)
+        XCTAssertEqual(usage?.cacheReadTokens, 300_000)
+        XCTAssertEqual(usage?.contextLimit, 1_000_000)
+        XCTAssertEqual(usage?.contextUsed, 800_000)
+    }
 
-        // The ContextMonitor reads from ~/.claude/projects/<encoded-path>/<sessionId>.jsonl
-        // We can't easily inject that path, but we can test the ContextUsage struct directly
-        // and verify the JSONL parsing logic by testing the data structures
+    func testParseUsageNestedFormat() {
+        let line = """
+        {"type":"assistant","message":{"message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":100000,"cache_read_input_tokens":50000}}}}
+        """
+        let usage = ContextMonitor.shared.parseUsage(from: line)
+        XCTAssertNotNil(usage)
+        XCTAssertEqual(usage?.model, "claude-sonnet-4-6")
+        XCTAssertEqual(usage?.inputTokens, 100_000)
+        XCTAssertEqual(usage?.cacheReadTokens, 50_000)
+        XCTAssertEqual(usage?.contextLimit, 200_000)
+    }
 
-        let usage = ContextMonitor.ContextUsage(
-            model: "claude-haiku-4-5",
-            inputTokens: 10_000,
-            cacheReadTokens: 5_000,
-            contextLimit: 200_000
-        )
+    func testParseUsageSkipsZeroTokenEntries() {
+        // Zero-token entry followed by a real one — should return the real one
+        let content = """
+        {"type":"assistant","message":{"model":"claude-opus-4-6","usage":{"input_tokens":80000,"cache_read_input_tokens":20000}}}
+        {"type":"assistant","message":{"model":"claude-opus-4-6","usage":{"input_tokens":0,"cache_read_input_tokens":0}}}
+        """
+        let usage = ContextMonitor.shared.parseUsage(from: content)
+        XCTAssertNotNil(usage)
+        XCTAssertEqual(usage?.inputTokens, 80_000)
+    }
 
-        XCTAssertEqual(usage.contextUsed, 15_000)
-        XCTAssertEqual(usage.percentage, 7.5, accuracy: 0.01)
+    func testParseUsageReturnsLastEntry() {
+        // Two valid entries — should return the last one (most recent)
+        let content = """
+        {"type":"assistant","message":{"model":"claude-opus-4-6","usage":{"input_tokens":50000,"cache_read_input_tokens":10000}}}
+        {"type":"assistant","message":{"model":"claude-opus-4-6","usage":{"input_tokens":90000,"cache_read_input_tokens":30000}}}
+        """
+        let usage = ContextMonitor.shared.parseUsage(from: content)
+        XCTAssertNotNil(usage)
+        XCTAssertEqual(usage?.inputTokens, 90_000)
+        XCTAssertEqual(usage?.cacheReadTokens, 30_000)
+    }
+
+    func testParseUsageNoUsageLines() {
+        let content = """
+        {"type":"user","message":{"content":"hello"}}
+        {"type":"assistant","message":{"content":[{"type":"text","text":"hi"}]}}
+        """
+        let usage = ContextMonitor.shared.parseUsage(from: content)
+        XCTAssertNil(usage)
+    }
+
+    func testParseUsageEmptyContent() {
+        XCTAssertNil(ContextMonitor.shared.parseUsage(from: ""))
+    }
+
+    func testParseUsageUnknownModelGetsDefaultLimit() {
+        let line = """
+        {"type":"assistant","message":{"model":"claude-unknown-99","usage":{"input_tokens":10000,"cache_read_input_tokens":5000}}}
+        """
+        let usage = ContextMonitor.shared.parseUsage(from: line)
+        XCTAssertNotNil(usage)
+        XCTAssertEqual(usage?.contextLimit, 200_000)
+    }
+
+    func testParseUsageIgnoresInvalidJSON() {
+        let content = """
+        not valid json at all
+        {"type":"assistant","message":{"model":"claude-opus-4-6","usage":{"input_tokens":10000,"cache_read_input_tokens":5000}}}
+        also not json
+        """
+        let usage = ContextMonitor.shared.parseUsage(from: content)
+        XCTAssertNotNil(usage)
+        XCTAssertEqual(usage?.inputTokens, 10_000)
+    }
+
+    // MARK: - getUsageFromFile (file I/O + progressive read)
+
+    func testGetUsageFromFileBasic() throws {
+        let path = makeTempJSONL(lines: [
+            assistantUsageLine(model: "claude-sonnet-4-6", input: 40_000, cacheRead: 10_000)
+        ])
+        let usage = ContextMonitor.shared.getUsageFromFile(at: path)
+        XCTAssertNotNil(usage)
+        XCTAssertEqual(usage?.inputTokens, 40_000)
+        XCTAssertEqual(usage?.cacheReadTokens, 10_000)
+        XCTAssertEqual(usage?.contextLimit, 200_000)
+    }
+
+    func testGetUsageFromFileNonexistent() {
+        let usage = ContextMonitor.shared.getUsageFromFile(at: "/tmp/nonexistent-\(UUID().uuidString).jsonl")
+        XCTAssertNil(usage)
+    }
+
+    func testGetUsageFromFileEmpty() throws {
+        let path = makeTempJSONL(lines: [])
+        let usage = ContextMonitor.shared.getUsageFromFile(at: path)
+        XCTAssertNil(usage)
+    }
+
+    func testGetUsageFromFileWithLargePaddingBefore() throws {
+        // Simulate a large session where the usage entry is far from the end.
+        // Insert >256KB of padding after the usage entry, then verify the
+        // progressive read (1MB fallback) finds it.
+        let usageLine = assistantUsageLine(model: "claude-opus-4-6", input: 600_000, cacheRead: 200_000)
+        // Each padding line is ~200 bytes; we need >256KB = ~1300 lines
+        let paddingLine = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"\(String(repeating: "x", count: 180))\"}]}}"
+        var lines = [usageLine]
+        for _ in 0..<1400 {
+            lines.append(paddingLine)
+        }
+        let path = makeTempJSONL(lines: lines)
+
+        // Verify file is actually >256KB
+        let attrs = try FileManager.default.attributesOfItem(atPath: path)
+        let fileSize = attrs[.size] as! UInt64
+        XCTAssertGreaterThan(fileSize, 256 * 1024, "Test file should exceed 256KB to exercise fallback")
+
+        let usage = ContextMonitor.shared.getUsageFromFile(at: path)
+        XCTAssertNotNil(usage, "Should find usage via 1MB fallback read")
+        XCTAssertEqual(usage?.inputTokens, 600_000)
+        XCTAssertEqual(usage?.cacheReadTokens, 200_000)
+        XCTAssertEqual(usage?.model, "claude-opus-4-6")
+    }
+
+    func testGetUsageFromFileNoUsageInFile() throws {
+        let lines = [
+            "{\"type\":\"user\",\"promptId\":\"p1\",\"message\":{\"content\":\"hello\"}}",
+            "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}",
+        ]
+        let path = makeTempJSONL(lines: lines)
+        let usage = ContextMonitor.shared.getUsageFromFile(at: path)
+        XCTAssertNil(usage)
+    }
+
+    // MARK: - Caching behavior
+
+    func testCacheFallsBackWhenFileLacksUsage() throws {
+        let monitor = ContextMonitor()
+
+        // First call: file has usage → populates cache
+        let tempDir = NSTemporaryDirectory() + "deckard-cache-test-\(UUID().uuidString)"
+        let encoded = tempDir.claudeProjectDirName
+        let projectDir = NSHomeDirectory() + "/.claude/projects/\(encoded)"
+        try FileManager.default.createDirectory(atPath: projectDir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(atPath: projectDir) }
+
+        let sessionId = "cache-test-\(UUID().uuidString)"
+        let jsonlPath = projectDir + "/\(sessionId).jsonl"
+
+        // Write file with usage
+        let withUsage = assistantUsageLine(model: "claude-opus-4-6", input: 400_000, cacheRead: 100_000)
+        try (withUsage + "\n").write(toFile: jsonlPath, atomically: true, encoding: .utf8)
+
+        let usage1 = monitor.getUsage(sessionId: sessionId, projectPath: tempDir)
+        XCTAssertNotNil(usage1)
+        XCTAssertEqual(usage1?.inputTokens, 400_000)
+
+        // Overwrite file with no usage lines
+        let noUsage = "{\"type\":\"user\",\"promptId\":\"p1\",\"message\":{\"content\":\"hello\"}}\n"
+        try noUsage.write(toFile: jsonlPath, atomically: true, encoding: .utf8)
+
+        // Second call: file lacks usage → should return cached value
+        let usage2 = monitor.getUsage(sessionId: sessionId, projectPath: tempDir)
+        XCTAssertNotNil(usage2, "Should return cached value when file lacks usage")
+        XCTAssertEqual(usage2?.inputTokens, 400_000)
+    }
+
+    func testCacheUpdatesWhenNewUsageFound() throws {
+        let monitor = ContextMonitor()
+
+        let tempDir = NSTemporaryDirectory() + "deckard-cache-update-\(UUID().uuidString)"
+        let encoded = tempDir.claudeProjectDirName
+        let projectDir = NSHomeDirectory() + "/.claude/projects/\(encoded)"
+        try FileManager.default.createDirectory(atPath: projectDir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(atPath: projectDir) }
+
+        let sessionId = "cache-update-\(UUID().uuidString)"
+        let jsonlPath = projectDir + "/\(sessionId).jsonl"
+
+        // First: smaller usage
+        let line1 = assistantUsageLine(model: "claude-opus-4-6", input: 100_000, cacheRead: 50_000)
+        try (line1 + "\n").write(toFile: jsonlPath, atomically: true, encoding: .utf8)
+
+        let usage1 = monitor.getUsage(sessionId: sessionId, projectPath: tempDir)
+        XCTAssertEqual(usage1?.inputTokens, 100_000)
+
+        // Second: larger usage
+        let line2 = assistantUsageLine(model: "claude-opus-4-6", input: 300_000, cacheRead: 200_000)
+        try (line1 + "\n" + line2 + "\n").write(toFile: jsonlPath, atomically: true, encoding: .utf8)
+
+        let usage2 = monitor.getUsage(sessionId: sessionId, projectPath: tempDir)
+        XCTAssertEqual(usage2?.inputTokens, 300_000, "Cache should update to newest usage")
+    }
+
+    func testNoCacheForNeverSeenSession() {
+        let monitor = ContextMonitor()
+        let usage = monitor.getUsage(
+            sessionId: "never-seen-\(UUID().uuidString)",
+            projectPath: "/nonexistent/\(UUID().uuidString)")
+        XCTAssertNil(usage, "No cache for a session never queried before")
+    }
+
+    // MARK: - Helpers
+
+    private func assistantUsageLine(model: String, input: Int, cacheRead: Int) -> String {
+        "{\"type\":\"assistant\",\"message\":{\"model\":\"\(model)\",\"usage\":{\"input_tokens\":\(input),\"cache_read_input_tokens\":\(cacheRead)}}}"
+    }
+
+    private func makeTempJSONL(lines: [String]) -> String {
+        let path = NSTemporaryDirectory() + "deckard-test-\(UUID().uuidString).jsonl"
+        let content = lines.joined(separator: "\n") + (lines.isEmpty ? "" : "\n")
+        FileManager.default.createFile(atPath: path, contents: content.data(using: .utf8))
+        addTeardownBlock { try? FileManager.default.removeItem(atPath: path) }
+        return path
     }
 
     // MARK: - ContextMonitor shared instance

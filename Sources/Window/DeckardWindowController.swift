@@ -920,11 +920,14 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     private func updateContextUsage(for tab: TabItem) {
         guard let sessionId = tab.sessionId,
               let project = currentProject else {
+            DiagnosticLog.shared.log("context",
+                "updateContextUsage: skipped — sessionId=\(tab.sessionId ?? "nil") project=\(currentProject != nil)")
             quotaView.updateContext(usage: nil, tabName: nil)
             return
         }
 
         let tabName = tab.name
+        let tabId = tab.id
         let projectPath = project.path
         let allPaths = projects.map { $0.path }
         DispatchQueue.global(qos: .utility).async {
@@ -932,6 +935,14 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
             let rate = QuotaMonitor.shared.computeTokenRate(projectPaths: allPaths)
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                // Only update if this tab is still the active one
+                guard let project = self.currentProject,
+                      let activeTab = project.tabs[safe: project.selectedTabIndex],
+                      activeTab.id == tabId else {
+                    DiagnosticLog.shared.log("context",
+                        "updateContextUsage: stale callback for \(tabName), ignoring")
+                    return
+                }
                 self.quotaView.updateContext(usage: usage, tabName: tabName)
                 self.quotaView.update(
                     snapshot: QuotaMonitor.shared.latest,
