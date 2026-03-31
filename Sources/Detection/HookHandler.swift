@@ -11,6 +11,8 @@ class HookHandler {
 
         case "hook.session-start":
             if let surfaceId = message.surfaceId {
+                // Tab is now restored — re-enable unseen tracking.
+                windowController?.tabForSurfaceId(surfaceId)?.suppressUnseen = false
                 windowController?.updateBadge(forSurfaceId: surfaceId, state: .waitingForInput)
                 windowController?.revealClaudeTab(surfaceId: surfaceId)
                 // Capture the real session ID from Claude Code

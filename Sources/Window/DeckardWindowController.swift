@@ -20,6 +20,8 @@ class TabItem {
     var isClaude: Bool
     var sessionId: String?
     var badgeState: BadgeState = .none
+    /// Set during restore — suppresses completedUnseen until hook.session-start fires.
+    var suppressUnseen: Bool = false
 
     enum BadgeState: String {
         case none
@@ -647,6 +649,9 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         let tab = TabItem(surface: surface, name: tabName, isClaude: isClaude)
         surface.tabId = tab.id
         tab.badgeState = isClaude ? .idle : .terminalIdle
+        if isClaude && isRestoring {
+            tab.suppressUnseen = true
+        }
         var envVars: [String: String] = [:]
         if isClaude {
             tab.sessionId = sessionIdToResume
@@ -1141,9 +1146,9 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
         let visible = isTabVisible(surfaceIdStr)
         let idleState: TabItem.BadgeState = isClaude ? .waitingForInput : .terminalIdle
         let unseenState: TabItem.BadgeState = isClaude ? .completedUnseen : .terminalCompletedUnseen
-        let newState = (wasBusy && !visible) ? unseenState : idleState
+        let newState = (wasBusy && !visible && !tab.suppressUnseen) ? unseenState : idleState
         DiagnosticLog.shared.log("badge",
-            "updateBadgeToIdleOrUnseen: surfaceId=\(surfaceIdStr) wasBusy=\(wasBusy) visible=\(visible) -> \(newState)")
+            "updateBadgeToIdleOrUnseen: surfaceId=\(surfaceIdStr) wasBusy=\(wasBusy) visible=\(visible) suppress=\(tab.suppressUnseen) -> \(newState)")
         tab.badgeState = newState
         rebuildSidebar()
         rebuildTabBar()
