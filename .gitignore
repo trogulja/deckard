@@ -12,3 +12,6 @@ DerivedData/
 
 # Worktrees
 .worktrees/
+
+# Superpowers
+.superpowers/
