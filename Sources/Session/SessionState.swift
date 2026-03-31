@@ -102,12 +102,19 @@ class SessionManager {
     }()
 
     private var autosaveTimer: Timer?
+    private(set) var isDirty = false
+
+    /// Mark state as changed so the next autosave cycle writes to disk.
+    func markDirty() {
+        isDirty = true
+    }
 
     func save(_ state: DeckardState) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(state) else { return }
         try? data.write(to: stateURL, options: .atomic)
+        isDirty = false
     }
 
     func load() -> DeckardState? {
@@ -118,7 +125,8 @@ class SessionManager {
     func startAutosave(provider: @escaping () -> DeckardState) {
         autosaveTimer?.invalidate()
         autosaveTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
-            self?.save(provider())
+            guard let self, self.isDirty else { return }
+            self.save(provider())
         }
     }
 

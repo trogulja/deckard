@@ -1244,7 +1244,7 @@ class DeckardWindowController: NSWindowController, NSSplitViewDelegate {
     }
 
     func saveState() {
-        SessionManager.shared.save(captureState())
+        SessionManager.shared.markDirty()
     }
 
     private func restoreOrCreateInitial() {

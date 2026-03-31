@@ -128,7 +128,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        windowController?.saveState()
+        if let wc = windowController {
+            SessionManager.shared.save(wc.captureState())
+        }
         ControlSocket.shared.stop()
     }
 
