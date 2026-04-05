@@ -759,7 +759,7 @@
 			repositoryURL = "https://github.com/gi11es/SwiftTerm";
 			requirement = {
 				kind = branch;
-				branch = main;
+				branch = main-updated;
 			};
 		};
 		SP000003SP000003SP000003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {

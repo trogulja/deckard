@@ -105,6 +105,12 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
         self.terminalView = DeckardTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         super.init()
         terminalView.processDelegate = self
+        // Use narrow RI width (1) to match system wcwidth() and avoid cursor
+        // divergence with tmux during partial screen repaints.
+        terminalView.getTerminal().options.regionalIndicatorWidth = .narrow
+        // Reduce sync output debounce from 100ms to 8ms to avoid input lag
+        // in non-tmux tabs (tmux handles DEC 2026 internally).
+        terminalView.syncSequenceSettleMs = 8
         // Let macOS handle Option+key for dead key / accent composition (é, ü, etc.)
         // instead of sending ESC+letter sequences. Matches Terminal.app default behavior.
         terminalView.optionAsMetaKey = false
