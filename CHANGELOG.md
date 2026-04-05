@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.0](https://github.com/gi11es/deckard/compare/v0.17.2...v0.18.0) (2026-04-05)
+
+
+### Features
+
+* improve terminal text selection with persistent highlight and click bindings ([#69](https://github.com/gi11es/deckard/issues/69)) ([548f704](https://github.com/gi11es/deckard/commit/548f704de490ce436388ceed355e310adc5785bb))
+
+
+### Bug Fixes
+
+* switch to SwiftTerm main-updated branch with flag emoji and input lag fixes ([edb3346](https://github.com/gi11es/deckard/commit/edb3346f795e946d4862db329f571a2a55d5e27d))
+
 ## [0.17.2](https://github.com/gi11es/deckard/compare/v0.17.1...v0.17.2) (2026-04-01)
 
 
