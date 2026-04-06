@@ -34,7 +34,7 @@ enum DeckardHooksInstaller {
                         FILE_CWD=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('cwd',''))" "$SESSION_FILE" 2>/dev/null)
                         if [ "$FILE_CWD" = "$CWD" ]; then
                             SID=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['sessionId'])" "$SESSION_FILE" 2>/dev/null)
-                            break
+                            [ -n "$SID" ] && break
                         fi
                     fi
                 done
