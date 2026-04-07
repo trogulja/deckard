@@ -116,13 +116,13 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSTextFie
         let grid = NSGridView(numberOfColumns: 2, rows: 0)
         grid.translatesAutoresizingMaskIntoConstraints = false
         grid.column(at: 0).xPlacement = .trailing
-        grid.column(at: 0).width = 120
+        grid.column(at: 0).width = 175
         grid.column(at: 1).xPlacement = .fill
         grid.rowSpacing = 6
         grid.columnSpacing = 8
 
         // Extra arguments
-        let extraArgsLabel = NSTextField(labelWithString: "Extra arguments:")
+        let extraArgsLabel = NSTextField(labelWithString: "Default Claude arguments:")
         extraArgsLabel.alignment = .right
 
         let extraArgsField = ClaudeArgsField(frame: NSRect(x: 0, y: 0, width: 400, height: 60))
@@ -135,7 +135,7 @@ class SettingsWindowController: NSWindowController, NSToolbarDelegate, NSTextFie
 
         grid.addRow(with: [extraArgsLabel, extraArgsField])
 
-        let extraArgsHelp = NSTextField(labelWithString: "Arguments passed to every new Claude Code session.")
+        let extraArgsHelp = NSTextField(labelWithString: "Arguments passed to every new Claude Code session. Can be overridden per project.")
         extraArgsHelp.font = .systemFont(ofSize: 11)
         extraArgsHelp.textColor = .secondaryLabelColor
         grid.addRow(with: [NSGridCell.emptyContentView, extraArgsHelp])
