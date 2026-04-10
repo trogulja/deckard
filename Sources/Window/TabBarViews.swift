@@ -16,6 +16,8 @@ class HorizontalTabView: NSView, NSTextFieldDelegate, NSDraggingSource {
     var onClearName: (() -> Void)?
     var onEditingFinished: (() -> Void)?
     var onClose: (() -> Void)?
+    var onNewClaude: (() -> Void)?
+    var onNewTerminal: (() -> Void)?
     private var rawName: String
 
     private var displayTitle: String
@@ -178,13 +180,16 @@ class HorizontalTabView: NSView, NSTextFieldDelegate, NSDraggingSource {
 
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu()
+        menu.addItem(withTitle: "New Claude Tab", action: #selector(newClaudeAction), keyEquivalent: "")
+        menu.addItem(withTitle: "New Terminal Tab", action: #selector(newTerminalAction), keyEquivalent: "")
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Close Tab", action: #selector(closeTabAction), keyEquivalent: "")
         NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
 
-    @objc private func closeTabAction() {
-        onClose?()
-    }
+    @objc private func newClaudeAction() { onNewClaude?() }
+    @objc private func newTerminalAction() { onNewTerminal?() }
+    @objc private func closeTabAction() { onClose?() }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {
         if sel == #selector(insertNewline(_:)) {

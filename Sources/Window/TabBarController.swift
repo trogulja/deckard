@@ -75,6 +75,12 @@ extension DeckardWindowController {
                 btn.tag = i
                 self.tabBarCloseClicked(btn)
             }
+            tabView.onNewClaude = { [weak self] in
+                self?.addTabToCurrentProject(isClaude: true)
+            }
+            tabView.onNewTerminal = { [weak self] in
+                self?.addTabToCurrentProject(isClaude: false)
+            }
             tabView.onEditingFinished = { [weak self] in
                 guard let self = self, self.needsTabBarRebuild else { return }
                 self.needsTabBarRebuild = false
