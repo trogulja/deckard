@@ -180,10 +180,21 @@ class HorizontalTabView: NSView, NSTextFieldDelegate, NSDraggingSource {
 
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu()
-        menu.addItem(withTitle: "New Claude Tab", action: #selector(newClaudeAction), keyEquivalent: "")
-        menu.addItem(withTitle: "New Terminal Tab", action: #selector(newTerminalAction), keyEquivalent: "")
+
+        let claudeItem = NSMenuItem(title: "New Claude Tab", action: #selector(newClaudeAction), keyEquivalent: "")
+        claudeItem.setShortcut(for: .newClaudeTab)
+        menu.addItem(claudeItem)
+
+        let termItem = NSMenuItem(title: "New Terminal Tab", action: #selector(newTerminalAction), keyEquivalent: "")
+        termItem.setShortcut(for: .newTerminalTab)
+        menu.addItem(termItem)
+
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Close Tab", action: #selector(closeTabAction), keyEquivalent: "")
+
+        let closeItem = NSMenuItem(title: "Close Tab", action: #selector(closeTabAction), keyEquivalent: "")
+        closeItem.setShortcut(for: .closeTab)
+        menu.addItem(closeItem)
+
         NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
 
