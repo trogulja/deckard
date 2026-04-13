@@ -36,5 +36,21 @@
 	<string>Deckard needs access to your Desktop folder to open projects and run terminal sessions in those directories.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>Deckard needs access to your Downloads folder to open projects and run terminal sessions in those directories.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>A program running inside Deckard would like to access your reminders.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>A program running inside Deckard would like to access your calendar data.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>A program running inside Deckard would like to access your contacts.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>A program running inside Deckard would like to access the camera.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>A program running inside Deckard would like to access the microphone.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>A program running inside Deckard would like to access AppleScript.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>A program running inside Deckard would like to access your location information.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>A program running inside Deckard would like to access your photo library.</string>
 </dict>
 </plist>
