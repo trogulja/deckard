@@ -16,3 +16,6 @@ DerivedData/
 # Superpowers
 .superpowers/
 docs/superpowers/
+
+# Local self-host build helper (ad-hoc build + re-sign), not for upstream
+/scripts/build-local.sh
