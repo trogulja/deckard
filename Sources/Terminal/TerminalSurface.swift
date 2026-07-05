@@ -380,9 +380,11 @@ class TerminalSurface: NSObject, LocalProcessTerminalViewDelegate {
         var env = ProcessInfo.processInfo.environment
         env["TERM"] = "xterm-256color"
         env["COLORTERM"] = "truecolor"
-        // Advertise terminal identity so CLI tools (e.g. Claude Code) can detect
-        // Kitty keyboard protocol support for Shift+Enter and other modified keys.
-        env["TERM_PROGRAM"] = "Deckard"
+        // Present as kitty so CLI tools (e.g. Claude Code) enable the Kitty
+        // keyboard protocol for Shift+Enter and other modified keys. SwiftTerm
+        // implements the protocol, but Claude Code only pushes it for an
+        // allowlisted set of terminal identities; "Deckard" is not on it.
+        env["TERM_PROGRAM"] = "kitty"
         // Ensure UTF-8 locale for proper emoji/wide character handling in tmux
         if env["LANG"] == nil && env["LC_ALL"] == nil {
             env["LANG"] = "en_US.UTF-8"
