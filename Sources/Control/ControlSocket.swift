@@ -33,7 +33,8 @@ class ControlSocket {
     private func startOnQueue() {
         if socketPath.isEmpty {
             let tmpDir = ProcessInfo.processInfo.environment["TMPDIR"] ?? "/tmp"
-            socketPath = "\(tmpDir)deckard-\(getuid()).sock"
+            socketPath = URL(fileURLWithPath: tmpDir, isDirectory: true)
+                .appendingPathComponent("deckard-\(getuid()).sock").path
         }
 
         // Tear down any existing listener before recreating
