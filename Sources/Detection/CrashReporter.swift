@@ -17,9 +17,19 @@ enum CrashReporter {
 
     /// Install all handlers.  Call as early as possible (before NSApplication).
     static func install() {
+        ignoreSIGPIPE()
         gCrashCPath = strdup(crashFileURL.path)
         installExceptionHandler()
         installSignalHandlers()
+    }
+
+    /// Ignore SIGPIPE process-wide. A write to a socket or pipe whose peer has
+    /// already closed (a hook client that disconnected, a child PTY torn down
+    /// during sleep/screen-lock) otherwise delivers SIGPIPE, whose default
+    /// disposition silently terminates the process with no crash report. With
+    /// it ignored, such writes return -1/EPIPE for the write site to handle.
+    private static func ignoreSIGPIPE() {
+        signal(SIGPIPE, SIG_IGN)
     }
 
     /// If a crash.log exists from a previous run, copy its contents into

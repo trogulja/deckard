@@ -82,6 +82,26 @@ final class CrashReporterTests: XCTestCase {
         }
     }
 
+    // MARK: - SIGPIPE
+
+    func testSIGPIPEIsIgnoredSoWriteToClosedPeerReturnsEPIPE() {
+        // install() must ignore SIGPIPE process-wide; without it, the write to a
+        // closed pipe below would terminate this test process instead of returning.
+        CrashReporter.install()
+
+        var fds: [Int32] = [0, 0]
+        XCTAssertEqual(pipe(&fds), 0)
+        close(fds[0]) // read end gone — peer disconnected
+
+        let byte: [UInt8] = [0x41]
+        let written = write(fds[1], byte, 1)
+        let writeErrno = errno
+        close(fds[1])
+
+        XCTAssertEqual(written, -1)
+        XCTAssertEqual(writeErrno, EPIPE)
+    }
+
     // MARK: - Crash report directory creation
 
     func testCrashReportDirectoryExists() {

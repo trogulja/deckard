@@ -208,7 +208,11 @@ class ControlSocket {
         guard let message = try? JSONDecoder().decode(ControlMessage.self, from: data) else {
             // Try to send error response
             let errorResp = "{\"ok\":false,\"error\":\"invalid JSON\"}\n"
-            _ = errorResp.withCString { write(fd, $0, strlen($0)) }
+            _ = errorResp.withCString { ptr -> Int in
+                let n = write(fd, ptr, strlen(ptr))
+                if n == -1 { Self.logWriteFailure(fd, errno) }
+                return n
+            }
             clientSources.removeValue(forKey: fd)?.cancel()
             return
         }
@@ -222,13 +226,22 @@ class ControlSocket {
                     var resp = respData
                     resp.append(0x0A) // newline
                     resp.withUnsafeBytes { ptr in
-                        _ = write(fd, ptr.baseAddress!, resp.count)
+                        let n = write(fd, ptr.baseAddress!, resp.count)
+                        if n == -1 { Self.logWriteFailure(fd, errno) }
                     }
                 }
                 // Cancel the source (its cancel handler closes fd)
                 source?.cancel()
             }
         }
+    }
+
+    /// Log a failed write to a client fd. With SIGPIPE ignored process-wide, a
+    /// write to a client that has already disconnected returns -1/EPIPE here
+    /// rather than terminating the app, so it is logged instead of silent.
+    private static func logWriteFailure(_ fd: Int32, _ err: Int32) {
+        DiagnosticLog.shared.log(
+            "socket", "write to client fd=\(fd) failed: \(String(cString: strerror(err))) (errno=\(err))")
     }
 }
 
