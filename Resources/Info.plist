@@ -24,12 +24,8 @@
 	<string></string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<key>SUFeedURL</key>
-	<string>https://github.com/gi11es/deckard/releases/latest/download/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>v0PhN0MJ3zWoKhQpY+dbvL7sX8nH1XehiL4w+Do4Jog=</string>
 	<key>SUEnableAutomaticChecks</key>
-	<true/>
+	<false/>
 	<key>NSDocumentsFolderUsageDescription</key>
 	<string>Deckard needs access to your Documents folder to open projects and run terminal sessions in those directories.</string>
 	<key>NSDesktopFolderUsageDescription</key>
